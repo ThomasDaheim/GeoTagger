@@ -71,14 +71,15 @@ Videos durchlaufen denselben Ablauf.
 | Breite, Länge | Track-Sync, Karte, manuell | EXIF GPS bzw. QuickTime GPS, XMP `exif:GPS*` |
 | Höhe | Track, openrouteservice, SRTM, manuell | EXIF `GPSAltitude` und `GPSAltitudeRef`, XMP |
 | Ländercode, Land, Region, Ort, Sublocation | Reverse-Geocoding, manuell | IPTC (`Country-PrimaryLocationCode`, `Country-PrimaryLocationName`, `Province-State`, `City`, `Sub-location`) und XMP (`photoshop:*`, `Iptc4xmpCore:*`), jeweils konsistent |
-| Zeitzone der Aufnahme | Offline-Zeitzonenabfrage aus den Koordinaten, oder Kamera-Zeitzone aus dem Sync-Dialog | EXIF `OffsetTimeOriginal` (bei Videos: XMP) |
+| Zeitzone der Aufnahme | Offline-Zeitzonenabfrage aus den Koordinaten, oder Kamera-Zeitzone aus dem Sync-Dialog | EXIF `OffsetTimeOriginal`. Bei Videos und Sidecar-Dateien wird sie in Version 1 nicht geschrieben, weil es dafür kein Standard-Tag gibt, das die Aufnahmezeit unberührt lässt. |
 
 Die konkrete Tag-Zuordnung je Format liegt gekapselt im Paket `metadata` und wird über Integrationstests abgesichert.
 
 ### Schreibregeln
 
 - Metadaten werden **direkt in die Datei** geschrieben, wenn ExifTool das Format schreiben kann. Das gilt auch für RAW, HEIC, MOV und MP4.
-- Nur für Formate, die ExifTool nicht schreiben kann, entsteht eine **XMP-Sidecar-Datei** (`<name>.xmp`).
+- Nur für Formate, die ExifTool nicht schreiben kann, entsteht eine **XMP-Sidecar-Datei**. Ihr Name ist der Dateiname ohne Endung plus `.xmp` (aus `clip.avi` wird `clip.xmp`), wie bei Lightroom.
+- PNG und HEIC bekommen kein IPTC. PNG kennt IPTC nicht als Standard, dort genügt XMP.
 - ExifTool behält die Originaldatei als `*_original` (kein `-overwrite_original`).
 - Die neue Datei behält die Datei-Zeitstempel des Originals (`-P`). Ob das unter Windows auch für das Erstellungsdatum gilt, klärt ein Integrationstest. Falls nicht, setzt die App das Erstellungsdatum nach dem Schreiben selbst zurück.
 - Die Aufnahmezeit (`DateTimeOriginal` usw.) wird nie verändert.
