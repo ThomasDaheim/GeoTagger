@@ -55,7 +55,8 @@ Videos durchlaufen denselben Ablauf.
 
 - Thumbnail-Raster. Die Liste und die große Vorschau reichen, so wie in GeoSetter.
 - Video-Vorschaubilder. Videos zeigen einen Platzhalter.
-- Aufnahmerichtung bzw. Kompassdaten, Favoriten, Ortssuche, direkte Koordinateneingabe.
+- Aufnahmerichtung bzw. Kompassdaten. Vorhandene Werte bleiben aber erhalten, siehe [Schreibregeln](#schreibregeln) und [Mögliche nächste Schritte](#mögliche-nächste-schritte).
+- Favoriten, Ortssuche, direkte Koordinateneingabe.
 - Titel, Beschreibung, Stichwörter.
 - Korrektur der Aufnahmezeit in der Datei (Offset schreiben).
 - Offset aus einem Referenzbild ableiten.
@@ -81,6 +82,7 @@ Die konkrete Tag-Zuordnung je Format liegt gekapselt im Paket `metadata` und wir
 - ExifTool behält die Originaldatei als `*_original` (kein `-overwrite_original`).
 - Die neue Datei behält die Datei-Zeitstempel des Originals (`-P`). Ob das unter Windows auch für das Erstellungsdatum gilt, klärt ein Integrationstest. Falls nicht, setzt die App das Erstellungsdatum nach dem Schreiben selbst zurück.
 - Die Aufnahmezeit (`DateTimeOriginal` usw.) wird nie verändert.
+- Geschrieben werden nur die Tags aus der Feldtabelle. Alle anderen Tags bleiben unverändert erhalten. Das gilt ausdrücklich für die Aufnahmerichtung (`GPSImgDirection`, `GPSImgDirectionRef`, `GPSDestBearing`), die Smartphones automatisch schreiben, auch wenn Koordinaten, Ort oder Höhe derselben Datei geändert werden.
 
 ## Architektur
 
@@ -222,9 +224,23 @@ Aktionen der Werkzeugleiste wirken auf die Auswahl. Ist nichts ausgewählt, wirk
   - Datei-Zeitstempel bleiben erhalten (Änderungs- und Erstellungsdatum)
   - Sidecar-Rückfall
   - Aufnahmezeit bleibt unverändert
+  - nicht verwaltete Tags bleiben erhalten, geprüft an einer Smartphone-Datei mit `GPSImgDirection`, deren Koordinaten, Ort und Höhe geändert werden
 - **Musterdateien:** je eine kleine Datei der echten Kameras (DSLR-RAW, Smartphone-JPEG/HEIC, Videos). Der Nutzer stellt sie bereit, sie liegen unter `src/test/resources`.
 - **Online-Dienste:** in Tests über Mocks der Schnittstellen, dazu ein manueller Smoke-Test.
 - **UI:** manueller Test des Workflows mit einer echten Sammlung.
+
+## Mögliche nächste Schritte
+
+Diese Punkte gehören nicht zu Version 1. Das Design soll sie aber ohne Umbau zulassen.
+
+- **Aufnahmerichtung anzeigen:**
+  - `MediaFile` bekommt ein nur lesbares Feld für `GPSImgDirection` und `GPSImgDirectionRef`.
+  - Die Karte zeichnet am ausgewählten Marker eine Linie oder einen Blickkegel in diese Richtung, wie GeoSetter.
+  - Geschätzter Aufwand: gering.
+- **Aufnahmerichtung bearbeiten** (danach):
+  - Ein Zielpunkt auf der Karte lässt sich ziehen, die App berechnet daraus den Winkel und schreibt ihn.
+  - Der Bezug `T` (geografisch) bzw. `M` (magnetisch) muss dabei beachtet werden.
+  - Kompassdaten aus GPX-Tracks sind nicht vorgesehen, weil kaum ein Gerät sie liefert.
 
 ## Offene Punkte für die Planung
 
