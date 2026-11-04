@@ -41,7 +41,7 @@ public enum FormatProfile {
     EXIF_XMP(MediaType.IMAGE, true, false, "png", "heic", "heif", "dng", "cr2", "cr3", "nef", "arw", "orf", "rw2", "raf"),
     /** QuickTime GPS (Keys:GPSCoordinates) + XMP directly in the file. */
     QUICKTIME(MediaType.VIDEO, false, false, "mov", "mp4", "m4v"),
-    /** ExifTool can't write these - XMP goes into <name without extension>.xmp next to the file. */
+    /** ExifTool can't write these - XMP goes into {@code <name without extension>.xmp} next to the file. */
     SIDECAR(MediaType.VIDEO, false, false, "avi", "mts", "m2ts");
 
     private final MediaType mediaType;

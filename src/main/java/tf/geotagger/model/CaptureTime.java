@@ -30,6 +30,9 @@ import java.util.Objects;
 
 /**
  * Capture time as stored in the file: camera local time (EXIF / XMP) or UTC (QuickTime CreateDate of videos).
+ *
+ * @param dateTime capture time without zone, as stored in the file
+ * @param utc true if dateTime is UTC, false if it is the local time of the camera clock
  */
 public record CaptureTime(LocalDateTime dateTime, boolean utc) {
     public CaptureTime {

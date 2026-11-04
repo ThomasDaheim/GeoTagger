@@ -66,7 +66,9 @@ enum ReadTag {
         this.key = key;
     }
 
-    /** name as requested from ExifTool and as key in its JSON output */
+    /**
+     * @return name as requested from ExifTool and as key in its JSON output
+     */
     String key() {
         return key;
     }

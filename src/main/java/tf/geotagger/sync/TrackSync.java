@@ -49,6 +49,10 @@ public final class TrackSync {
 
     /**
      * Files the sync should handle: candidates are all files ("Ohne Koordinaten") or the selection ("Auswahl").
+     *
+     * @param candidates all files or the selected ones
+     * @param overwriteExisting include files that already have coordinates
+     * @return the candidates the sync should handle, in their order
      */
     public static List<MediaFile> eligible(List<MediaFile> candidates, boolean overwriteExisting) {
         return candidates.stream().filter(file -> overwriteExisting || !file.hasCoordinates()).toList();
@@ -57,6 +61,8 @@ public final class TrackSync {
     /**
      * Sets the results with a position as pending changes - nothing is written to the files.
      *
+     * @param results results of match()
+     * @param parameters the parameters used for match() - elevation and time zone options
      * @return number of changed files
      */
     public static int apply(List<SyncResult> results, SyncParameters parameters) {

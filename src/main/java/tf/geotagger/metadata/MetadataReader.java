@@ -44,7 +44,7 @@ import tf.geotagger.model.Snapshot;
 
 /**
  * Reads the metadata of many files with as few ExifTool calls as possible (chunks of CHUNK_SIZE files).
- * For SIDECAR files the values of an existing <name>.xmp take precedence over the values of the file itself.
+ * For SIDECAR files the values of an existing {@code <name>.xmp} take precedence over the values of the file itself.
  */
 public class MetadataReader {
     static final int CHUNK_SIZE = 100;
@@ -60,7 +60,9 @@ public class MetadataReader {
     }
 
     /**
+     * @param files files to read - files without a FormatProfile are ignored
      * @param progress gets the number of files read so far after each chunk
+     * @return the read files in the order of files
      */
     public List<MediaFile> read(List<Path> files, IntConsumer progress) {
         final List<Path> supported = files.stream().filter(file -> FormatProfile.of(file).isPresent()).toList();

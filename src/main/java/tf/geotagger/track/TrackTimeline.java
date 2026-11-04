@@ -40,6 +40,7 @@ import java.util.Map;
  */
 public final class TrackTimeline {
     /**
+     * @param timeline points of all readable files
      * @param failures GPX files that couldn't be read, with the reason - the other files are part of the timeline
      */
     public record LoadResult(TrackTimeline timeline, Map<Path, String> failures) {
@@ -79,6 +80,9 @@ public final class TrackTimeline {
 
     /**
      * Last point at or before time - null if the track starts later.
+     *
+     * @param time moment to search for
+     * @return the neighbouring point at or before time, null if there is none
      */
     public TrackPoint atOrBefore(Instant time) {
         final int index = firstIndexAtOrAfter(time);
@@ -90,6 +94,9 @@ public final class TrackTimeline {
 
     /**
      * First point at or after time - null if the track ends earlier.
+     *
+     * @param time moment to search for
+     * @return the neighbouring point at or after time, null if there is none
      */
     public TrackPoint atOrAfter(Instant time) {
         final int index = firstIndexAtOrAfter(time);

@@ -30,6 +30,8 @@ import tf.geotagger.model.MediaFile;
 
 /**
  * Outcome of a save run - one entry per changed file.
+ *
+ * @param files result per changed file, in the order of saving
  */
 public record SaveResult(List<FileResult> files) {
     public enum Status {
@@ -41,6 +43,8 @@ public record SaveResult(List<FileResult> files) {
     }
 
     /**
+     * @param file the changed file
+     * @param status outcome for this file
      * @param message ExifTool errors for FAILED, warnings for SAVED (may be empty)
      */
     public record FileResult(MediaFile file, Status status, String message) {

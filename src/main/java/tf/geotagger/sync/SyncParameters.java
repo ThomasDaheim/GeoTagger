@@ -65,6 +65,10 @@ public record SyncParameters(ZoneId cameraZone, Duration cameraOffset, Duration 
 
     /**
      * Most frequent OffsetTimeOriginal of the files - fallback (usually the system zone) if none has one.
+     *
+     * @param files files of the sync
+     * @param fallback zone to use if no file has an OffsetTimeOriginal
+     * @return suggested camera zone for the sync dialog
      */
     public static ZoneId suggestedCameraZone(List<MediaFile> files, ZoneId fallback) {
         final Map<ZoneOffset, Long> counts = files.stream()

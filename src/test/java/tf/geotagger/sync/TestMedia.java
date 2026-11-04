@@ -47,6 +47,9 @@ final class TestMedia {
 
     /**
      * Image with a camera local capture time (null: no capture time) and no metadata values.
+     *
+     * @param localCaptureTime capture time of the camera clock, null for none
+     * @return a new MediaFile with a unique path
      */
     static MediaFile image(LocalDateTime localCaptureTime) {
         return file(MediaType.IMAGE, localCaptureTime == null ? null : new CaptureTime(localCaptureTime, false), Map.of());

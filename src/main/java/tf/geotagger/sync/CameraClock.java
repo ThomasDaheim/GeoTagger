@@ -50,6 +50,11 @@ public final class CameraClock {
 
     /**
      * What the camera display should show at the given moment - for comparison with the real camera.
+     *
+     * @param now the moment to show, usually Instant.now()
+     * @param cameraZone zone the camera clock is set to
+     * @param cameraOffset deviation of the camera clock, positive = camera ahead
+     * @return local date and time the camera should display
      */
     public static LocalDateTime cameraDisplay(Instant now, ZoneId cameraZone, Duration cameraOffset) {
         return LocalDateTime.ofInstant(now.plus(cameraOffset), cameraZone);

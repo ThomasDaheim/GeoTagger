@@ -31,6 +31,9 @@ import java.util.Objects;
 /**
  * One point of a GPX track.
  *
+ * @param time time of the point (UTC)
+ * @param latitude latitude in degrees
+ * @param longitude longitude in degrees
  * @param elevation may be null if the track has no elevation
  */
 public record TrackPoint(Instant time, double latitude, double longitude, Double elevation) {

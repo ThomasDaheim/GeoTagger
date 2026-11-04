@@ -32,7 +32,12 @@ import tf.geotagger.model.MediaFile;
 /**
  * Outcome of the track sync for one file - one row of the preview table in the sync dialog.
  *
+ * @param file the file this result belongs to
+ * @param status outcome of the matching
  * @param correctedTime capture time in UTC after applying camera zone and offset, null without capture time
+ * @param latitude matched latitude, null without position
+ * @param longitude matched longitude, null without position
+ * @param elevation elevation of the track at the matched position, null if unknown or without position
  * @param gap time to the nearest real track point (not the interpolated position), null if there is none
  */
 public record SyncResult(MediaFile file, Status status, Instant correctedTime, Double latitude, Double longitude,

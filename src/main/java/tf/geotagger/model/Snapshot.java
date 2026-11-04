@@ -36,6 +36,7 @@ import java.util.Objects;
  *
  * @param captureTime may be null if the file has no capture time
  * @param lastModified modification time of the file when it was read - used to detect changes from outside
+ * @param values field values found in the file - copied, without null values
  */
 public record Snapshot(CaptureTime captureTime, FileTime lastModified, Map<Field, Object> values) {
     public Snapshot {

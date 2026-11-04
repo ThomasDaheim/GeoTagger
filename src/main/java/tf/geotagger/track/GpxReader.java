@@ -82,6 +82,10 @@ public final class GpxReader {
 
     /**
      * Track points in file order - points without time or position are skipped.
+     *
+     * @param gpx GPX 1.0 or 1.1 file
+     * @return all track points with time and position
+     * @throws IOException if the file can't be read or isn't valid GPX
      */
     public static List<TrackPoint> read(Path gpx) throws IOException {
         final Gpx content;
@@ -107,6 +111,10 @@ public final class GpxReader {
 
     /**
      * GPX files directly in dir (no sub folders), sorted by name.
+     *
+     * @param dir folder to search
+     * @return the *.gpx files of the folder, case insensitive
+     * @throws IOException if the folder can't be listed
      */
     public static List<Path> findGpxFiles(Path dir) throws IOException {
         try (Stream<Path> files = Files.list(dir)) {

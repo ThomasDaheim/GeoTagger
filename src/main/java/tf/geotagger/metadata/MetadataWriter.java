@@ -64,7 +64,9 @@ public class MetadataWriter {
     }
 
     /**
+     * @param files files to save - only changed ones are written
      * @param progress gets the number of files handled so far (changed or not)
+     * @return one entry per changed file
      */
     public SaveResult save(List<MediaFile> files, IntConsumer progress) {
         final List<FileResult> results = new ArrayList<>();

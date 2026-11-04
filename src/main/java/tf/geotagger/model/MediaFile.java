@@ -92,6 +92,9 @@ public final class MediaFile {
     /**
      * Sets a value as pending change - null deletes the field on save.
      * Setting the original value again removes the pending change.
+     *
+     * @param field field to set
+     * @param value new value of the field's type, null to delete the field
      */
     public void set(Field field, Object value) {
         final Object normalized = normalize(field, value);
@@ -128,6 +131,8 @@ public final class MediaFile {
 
     /**
      * After saving: the file was read again, the pending changes are now part of the original.
+     *
+     * @param fresh values as read from the file after saving
      */
     public void replaceOriginal(Snapshot fresh) {
         original = Objects.requireNonNull(fresh);
