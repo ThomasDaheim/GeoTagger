@@ -1,0 +1,60 @@
+// =====================================================================================================================
+// GeoTagger build - JavaFX replacement for the parts of GeoSetter that are still needed
+// =====================================================================================================================
+//
+// Requirements
+//   - JDK 25 (Gradle toolchain) - Gradle 9 via gradlew
+//   - in the local maven repo (~/.m2): tf.GeoHelper:GeoHelper (build it there with "gradlew build")
+//   - ExifTool: tests look for it in EXIFTOOL_PATH and then on the PATH - without it they are skipped
+//
+// Main tasks
+//   gradlew build -> compile + test
+//   gradlew test  -> all tests
+//
+// JavaFX, JavaHelper and the application setup follow with plan 3 (main window).
+// =====================================================================================================================
+
+plugins {
+    id 'java'
+}
+
+group = 'tf.GeoTagger'
+version = '0.1'
+description = 'GeoTagger - JavaFX replacement for the parts of GeoSetter that are still needed'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+repositories {
+    mavenLocal() {
+        // only our own libraries come from the local repo - everything else from remote repos
+        content {
+            includeGroup 'tf.GeoHelper'
+        }
+    }
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'tf.GeoHelper:GeoHelper:0.1'
+
+    testImplementation platform('org.junit:junit-bom:5.13.0')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testImplementation 'org.junit.jupiter:junit-jupiter-params'
+    // Gradle 9 doesn't provide the launcher automatically anymore
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.compilerArgs += ['-Xlint:unchecked', '-Xlint:deprecation']
+}
+
+tasks.named('test', Test) {
+    useJUnitPlatform()
+    systemProperty 'java.awt.headless', 'true'
+    testLogging.showStandardStreams = true
+}

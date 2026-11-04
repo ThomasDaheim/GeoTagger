@@ -1,0 +1,6 @@
+.gradle/
+build/
+.idea/
+*.iml
+.nb-gradle/
+nbproject/private/
