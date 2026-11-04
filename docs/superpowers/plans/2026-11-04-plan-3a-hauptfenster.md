@@ -44,7 +44,13 @@ Spec: [2026-11-03-geotagger-design.md](../specs/2026-11-03-geotagger-design.md),
   $app = 'D:\Thomas\Development\NetBeansProjects\GeoTagger'
   ```
   Gradle-Befehle laufen in `$app` (`Set-Location $app`).
-- **ExifTool:** Die Tests finden es über `EXIFTOOL_PATH` oder den PATH. Auf dem Entwicklungsrechner ist das 13.38 unter `C:\Users\Thomas\AppData\Roaming\GeoSetter_beta\tools\exiftool.exe`. Die App selbst nimmt den Pfad aus den Einstellungen. Ist dort nichts gesetzt, sucht sie einmalig im PATH.
+- **ExifTool:**
+  - Die Tests finden es über `EXIFTOOL_PATH` oder den PATH.
+  - Auf dem Entwicklungsrechner gibt es zwei Installationen:
+    - per winget **13.59** unter `C:\Users\thomas\AppData\Local\Programs\ExifTool\exiftool.exe` (die gewünschte)
+    - GeoSetters 13.38 unter `C:\Users\Thomas\AppData\Roaming\GeoSetter_beta\tools\exiftool.exe`
+  - Der GeoSetter-Ordner steht im PATH zuerst. Alle Tests sind mit beiden Versionen grün.
+  - Die App selbst nimmt den Pfad aus den Einstellungen. Ist dort nichts gesetzt, sucht sie einmalig im PATH. In Task 6, Checkliste Punkt 2, deshalb die winget-Version über „Browse...“ auswählen, falls der PATH noch GeoSetters Version liefert.
 - **Fachliche Regeln aus der Spec:**
   - Formate gemäß `FormatProfile`. GPX-Dateien werden mitgefunden (für Plan 4), `*_original` und `.xmp` nicht.
   - Gelesen wird in Blöcken von 100 Dateien mit Fortschrittsanzeige.
