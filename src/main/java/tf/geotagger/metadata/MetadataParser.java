@@ -47,28 +47,28 @@ final class MetadataParser {
 
     static Map<Field, Object> values(Map<String, Object> entry) {
         final Map<Field, Object> values = new EnumMap<>(Field.class);
-        put(values, Field.LATITUDE, firstDouble(entry, ReadTags.COMPOSITE_LATITUDE, ReadTags.XMP_LATITUDE));
-        put(values, Field.LONGITUDE, firstDouble(entry, ReadTags.COMPOSITE_LONGITUDE, ReadTags.XMP_LONGITUDE));
+        put(values, Field.LATITUDE, firstDouble(entry, ReadTag.COMPOSITE_LATITUDE, ReadTag.XMP_LATITUDE));
+        put(values, Field.LONGITUDE, firstDouble(entry, ReadTag.COMPOSITE_LONGITUDE, ReadTag.XMP_LONGITUDE));
         put(values, Field.ALTITUDE, altitude(entry));
-        put(values, Field.COUNTRY_CODE, firstText(entry, ReadTags.XMP_COUNTRY_CODE, ReadTags.IPTC_COUNTRY_CODE));
-        put(values, Field.COUNTRY, firstText(entry, ReadTags.XMP_COUNTRY, ReadTags.IPTC_COUNTRY));
-        put(values, Field.STATE, firstText(entry, ReadTags.XMP_STATE, ReadTags.IPTC_STATE));
-        put(values, Field.CITY, firstText(entry, ReadTags.XMP_CITY, ReadTags.IPTC_CITY));
-        put(values, Field.SUBLOCATION, firstText(entry, ReadTags.XMP_SUBLOCATION, ReadTags.IPTC_SUBLOCATION));
-        put(values, Field.TIME_OFFSET, offset(entry.get(ReadTags.EXIF_OFFSET_TIME_ORIGINAL)));
+        put(values, Field.COUNTRY_CODE, firstText(entry, ReadTag.XMP_COUNTRY_CODE, ReadTag.IPTC_COUNTRY_CODE));
+        put(values, Field.COUNTRY, firstText(entry, ReadTag.XMP_COUNTRY, ReadTag.IPTC_COUNTRY));
+        put(values, Field.STATE, firstText(entry, ReadTag.XMP_STATE, ReadTag.IPTC_STATE));
+        put(values, Field.CITY, firstText(entry, ReadTag.XMP_CITY, ReadTag.IPTC_CITY));
+        put(values, Field.SUBLOCATION, firstText(entry, ReadTag.XMP_SUBLOCATION, ReadTag.IPTC_SUBLOCATION));
+        put(values, Field.TIME_OFFSET, offset(get(entry, ReadTag.EXIF_OFFSET_TIME_ORIGINAL)));
         return values;
     }
 
     static CaptureTime captureTime(Map<String, Object> entry) {
-        LocalDateTime local = dateTime(entry.get(ReadTags.EXIF_DATE_TIME_ORIGINAL));
+        LocalDateTime local = dateTime(get(entry, ReadTag.EXIF_DATE_TIME_ORIGINAL));
         if (local == null) {
-            local = dateTime(entry.get(ReadTags.XMP_DATE_TIME_ORIGINAL));
+            local = dateTime(get(entry, ReadTag.XMP_DATE_TIME_ORIGINAL));
         }
         if (local != null) {
             return new CaptureTime(local, false);
         }
         // QuickTime stores UTC
-        final LocalDateTime utc = dateTime(entry.get(ReadTags.QUICKTIME_CREATE_DATE));
+        final LocalDateTime utc = dateTime(get(entry, ReadTag.QUICKTIME_CREATE_DATE));
         return utc != null ? new CaptureTime(utc, true) : null;
     }
 
@@ -78,22 +78,26 @@ final class MetadataParser {
         }
     }
 
+    private static Object get(Map<String, Object> entry, ReadTag tag) {
+        return entry.get(tag.key());
+    }
+
     private static Double altitude(Map<String, Object> entry) {
-        final Double composite = toDouble(entry.get(ReadTags.COMPOSITE_ALTITUDE));
+        final Double composite = toDouble(get(entry, ReadTag.COMPOSITE_ALTITUDE));
         if (composite != null) {
             return composite;
         }
-        final Double xmp = toDouble(entry.get(ReadTags.XMP_ALTITUDE));
+        final Double xmp = toDouble(get(entry, ReadTag.XMP_ALTITUDE));
         if (xmp == null) {
             return null;
         }
-        final Double ref = toDouble(entry.get(ReadTags.XMP_ALTITUDE_REF));
+        final Double ref = toDouble(get(entry, ReadTag.XMP_ALTITUDE_REF));
         return ref != null && ref.intValue() == 1 ? -xmp : xmp;
     }
 
-    private static Double firstDouble(Map<String, Object> entry, String... tags) {
-        for (String tag : tags) {
-            final Double value = toDouble(entry.get(tag));
+    private static Double firstDouble(Map<String, Object> entry, ReadTag... tags) {
+        for (ReadTag tag : tags) {
+            final Double value = toDouble(get(entry, tag));
             if (value != null) {
                 return value;
             }
@@ -101,9 +105,9 @@ final class MetadataParser {
         return null;
     }
 
-    private static String firstText(Map<String, Object> entry, String... tags) {
-        for (String tag : tags) {
-            final String value = toText(entry.get(tag));
+    private static String firstText(Map<String, Object> entry, ReadTag... tags) {
+        for (ReadTag tag : tags) {
+            final String value = toText(get(entry, tag));
             if (value != null) {
                 return value;
             }

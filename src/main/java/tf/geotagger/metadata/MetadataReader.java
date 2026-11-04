@@ -73,13 +73,13 @@ public class MetadataReader {
     }
 
     private List<MediaFile> readChunk(List<Path> chunk) {
-        final Map<Path, Map<String, Object>> entries = byPath(exifTool.readJson(chunk, ReadTags.ALL));
+        final Map<Path, Map<String, Object>> entries = byPath(exifTool.readJson(chunk, ReadTag.keys()));
         final List<Path> sidecars = chunk.stream()
                 .filter(file -> FormatProfile.of(file).orElseThrow() == FormatProfile.SIDECAR)
                 .map(FormatProfile::sidecarFor)
                 .filter(Files::isRegularFile)
                 .toList();
-        final Map<Path, Map<String, Object>> sidecarEntries = byPath(exifTool.readJson(sidecars, ReadTags.ALL));
+        final Map<Path, Map<String, Object>> sidecarEntries = byPath(exifTool.readJson(sidecars, ReadTag.keys()));
 
         final List<MediaFile> files = new ArrayList<>(chunk.size());
         for (Path file : chunk) {
@@ -99,7 +99,7 @@ public class MetadataReader {
     private static Map<Path, Map<String, Object>> byPath(List<Map<String, Object>> entries) {
         final Map<Path, Map<String, Object>> result = new HashMap<>();
         for (Map<String, Object> entry : entries) {
-            final Object source = entry.get(ReadTags.SOURCE_FILE);
+            final Object source = entry.get(ReadTag.SOURCE_FILE);
             if (source != null) {
                 result.put(key(Path.of(source.toString())), entry);
             }
