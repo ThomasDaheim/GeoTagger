@@ -154,6 +154,23 @@ class GpxReaderTest {
     }
 
     @Test
+    void elevationIsOptionalAndInvalidValuesDontBreakTheFile() throws IOException {
+        final StringBuilder content = new StringBuilder("<gpx><trk><trkseg>");
+        for (String ele : List.of("", "<ele/>", "<ele></ele>", "<ele> </ele>", "<ele>n/a</ele>", "<ele> 1200.5 </ele>")) {
+            content.append("<trkpt lat=\"46.4\" lon=\"11.6\">").append(ele).append("<time>2026-09-02T09:08:00Z</time></trkpt>");
+        }
+        content.append("</trkseg></trk></gpx>");
+
+        final List<TrackPoint> points = GpxReader.read(gpx("hoehe.gpx", content.toString()));
+
+        assertEquals(6, points.size());
+        for (int i = 0; i < 5; i++) {
+            assertNull(points.get(i).elevation(), "point " + i);
+        }
+        assertEquals(1200.5, points.get(5).elevation());
+    }
+
+    @Test
     void brokenFileFails() throws IOException {
         final Path broken = gpx("kaputt.gpx", "<gpx><trk><trkseg><trkpt lat=\"1\" lon=\"2\">");
         assertThrows(IOException.class, () -> GpxReader.read(broken));
@@ -257,7 +274,8 @@ public final class GpxReader {
 
     record Trkpt(@JacksonXmlProperty(isAttribute = true, localName = "lat") Double latitude,
             @JacksonXmlProperty(isAttribute = true, localName = "lon") Double longitude,
-            @JacksonXmlProperty(localName = "ele") Double elevation,
+            // ele is optional in GPX - read as text so that an invalid value only drops the elevation, not the file
+            @JacksonXmlProperty(localName = "ele") String elevation,
             // parsed by ourselves: GPX 1.0 files sometimes lack the zone
             @JacksonXmlProperty(localName = "time") String time) {
     }
@@ -287,7 +305,7 @@ public final class GpxReader {
                 for (Trkpt point : nullToEmpty(segment.points())) {
                     final Instant time = toInstant(point.time());
                     if (time != null && point.latitude() != null && point.longitude() != null) {
-                        points.add(new TrackPoint(time, point.latitude(), point.longitude(), point.elevation()));
+                        points.add(new TrackPoint(time, point.latitude(), point.longitude(), toDouble(point.elevation())));
                     }
                 }
             }
@@ -312,6 +330,17 @@ public final class GpxReader {
         return list == null ? List.of() : list;
     }
 
+    private static Double toDouble(String text) {
+        if (text == null || text.isBlank()) {
+            return null;
+        }
+        try {
+            return Double.valueOf(text.trim());
+        } catch (NumberFormatException ex) {
+            return null;
+        }
+    }
+
     private static Instant toInstant(String text) {
         if (text == null || text.isBlank()) {
             return null;
@@ -331,12 +360,16 @@ public final class GpxReader {
 }
 ```
 
-Hinweis: Steht in `lat`, `lon` oder `ele` keine Zahl, schlägt Jackson für die ganze Datei fehl, statt nur den Punkt zu überspringen. Die Datei landet dann als fehlerhaft in der Track-Liste. Das ist gewollt: Solche Dateien sind kaputt, und ein stilles Weglassen würde Lücken im Track verstecken.
+Hinweis zur Strenge, angelehnt an den GPX-Standard:
+- **`lat` und `lon`** sind dort Pflichtattribute. Steht darin keine Zahl, schlägt Jackson für die ganze Datei fehl, und sie landet als fehlerhaft in der Track-Liste. Solche Dateien sind kaputt, und ein stilles Weglassen würde Lücken im Track verstecken.
+- **`ele` und `time`** sind optional:
+  - Ein fehlendes, leeres oder ungültiges `ele` ergibt nur `elevation = null`, der Punkt bleibt erhalten.
+  - Ohne gültige `time` lässt sich der Punkt nicht abgleichen und wird übersprungen.
 
 - [ ] **Step 5: Tests laufen lassen**
 
 Run: `.\gradlew.bat test`
-Expected: BUILD SUCCESSFUL, 57 Tests grün (53 bisher + 4) und keine Compilerwarnungen.
+Expected: BUILD SUCCESSFUL, 58 Tests grün (53 bisher + 5) und keine Compilerwarnungen.
 
 - [ ] **Step 6: Commit**
 
@@ -544,7 +577,7 @@ public final class TrackTimeline {
 - [ ] **Step 4: Tests laufen lassen**
 
 Run: `.\gradlew.bat test`
-Expected: BUILD SUCCESSFUL, 62 Tests grün.
+Expected: BUILD SUCCESSFUL, 63 Tests grün.
 
 - [ ] **Step 5: Commit**
 
@@ -849,7 +882,7 @@ public record SyncParameters(ZoneId cameraZone, Duration cameraOffset, Duration 
 - [ ] **Step 4: Tests laufen lassen**
 
 Run: `.\gradlew.bat test`
-Expected: BUILD SUCCESSFUL, 71 Tests grün.
+Expected: BUILD SUCCESSFUL, 72 Tests grün.
 
 - [ ] **Step 5: Commit**
 
@@ -1160,7 +1193,7 @@ public final class TrackSync {
 - [ ] **Step 4: Tests laufen lassen**
 
 Run: `.\gradlew.bat test`
-Expected: BUILD SUCCESSFUL, 81 Tests grün.
+Expected: BUILD SUCCESSFUL, 82 Tests grün.
 
 - [ ] **Step 5: Commit**
 
@@ -1337,7 +1370,7 @@ Diese Methoden kommen nach `match(List<MediaFile>, TrackTimeline, SyncParameters
 - [ ] **Step 4: Tests laufen lassen**
 
 Run: `.\gradlew.bat test`
-Expected: BUILD SUCCESSFUL, 85 Tests grün und keine Compilerwarnungen.
+Expected: BUILD SUCCESSFUL, 86 Tests grün und keine Compilerwarnungen.
 
 - [ ] **Step 5: Commit**
 
@@ -1350,7 +1383,7 @@ Expected: BUILD SUCCESSFUL, 85 Tests grün und keine Compilerwarnungen.
 
 ## Abschluss von Plan 2
 
-- `.\gradlew.bat build` in `$app`: Alle 85 Tests sind grün, auch die mit den echten Musterdateien.
+- `.\gradlew.bat build` in `$app`: Alle 86 Tests sind grün, auch die mit den echten Musterdateien.
 - Nicht in diesem Plan:
   - Der Dialog selbst folgt in Plan 6.
   - Das Laden geladener Tracks aus der Track-Liste und die Anzeige auf der Karte folgen in Plan 4.
