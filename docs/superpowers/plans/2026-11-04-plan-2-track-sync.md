@@ -5,11 +5,11 @@
 **Goal:** Dateien ohne Koordinaten bekommen sie anhand ihrer Aufnahmezeit aus GPX-Tracks. Das ist reine, getestete Logik ohne UI, auf die der Sync-Dialog in Plan 6 aufsetzt.
 
 **Architecture:**
-- **`tf.geotagger.track`** liest GPX-Trackpunkte mit dem eingebauten StAX-Parser und legt sie auf einer zeitlich sortierten Zeitleiste mit Nachbarsuche ab.
+- **`tf.geotagger.track`** liest GPX-Trackpunkte mit Jackson XML (wie in den anderen Anwendungen) und legt sie auf einer zeitlich sortierten Zeitleiste mit Nachbarsuche ab.
 - **`tf.geotagger.sync`** rechnet die Kamerazeit über Kamera-Zeitzone und Offset in UTC um und sucht die Nachbarpunkte. Daraus berechnet es pro Datei ein Ergebnis, die Vorschau des Dialogs. Auf Wunsch überträgt es die Ergebnisse als ausstehende Änderungen in die `MediaFile`s.
 - Beide Pakete hängen nur von `tf.geotagger.model` ab.
 
-**Tech Stack:** Java 25, StAX (`javax.xml.stream`, Teil des JDK), `java.time`, JUnit 5.13.0. Es gibt keine neuen Abhängigkeiten.
+**Tech Stack:** Java 25, Jackson XML (`jackson-dataformat-xml`, BOM 2.21.2 wie in GPXEditor), `java.time`, JUnit 5.13.0.
 
 Spec: [2026-11-03-geotagger-design.md](../specs/2026-11-03-geotagger-design.md), Abschnitt „Track-Sync-Dialog“
 
@@ -18,7 +18,14 @@ Spec: [2026-11-03-geotagger-design.md](../specs/2026-11-03-geotagger-design.md),
 - Java 25 über die Gradle-Toolchain, Gradle 9.2.1 über den Wrapper. Gearbeitet wird direkt auf `master`.
 - **Lizenz-Header:** Jede `.java`-Datei, auch in `src/test`, beginnt mit dem BSD-Header aus GPXEditor („Copyright (c) 2014ff Thomas Feuster“, 25 Zeilen, wörtlich übernommen, z. B. von `GeoTagger\src\main\java\tf\geotagger\model\Field.java`). Die Codeblöcke unten lassen ihn der Kürze halber weg.
 - Code und Kommentare sind auf Englisch. Compilerwarnungen in `src/main` und `src/test` werden behoben (`-Xlint:unchecked`, `-Xlint:deprecation`).
-- Es kommen keine neuen Abhängigkeiten dazu. GPX wird mit StAX gelesen, **nicht** mit gpx-parser (das gibt es nur selbst gebaut in mavenLocal, und für den Sync reichen Zeit, Koordinate und Höhe).
+- **GPX** wird mit **Jackson XML** gelesen (`jackson-dataformat-xml`, BOM 2.21.2), dem Datenbindungs-Ansatz, den auch GPXEditor nutzt.
+  - Konsistenz zwischen den Anwendungen geht hier vor einem abhängigkeitsfreien StAX-Parser.
+  - gpx-parser wird nicht verwendet: Es gibt ihn nur selbst gebaut in mavenLocal, und für den Sync reichen Zeit, Koordinate und Höhe.
+  - Eine Probe gegen Jackson 2.21.2 hat bestätigt:
+    - Records mit `@JacksonXmlProperty(isAttribute = true)` und `@JacksonXmlElementWrapper(useWrapping = false)` funktionieren.
+    - Der GPX-Namensraum wird ignoriert, `FAIL_ON_UNKNOWN_PROPERTIES = false` überspringt `wpt`, `name` und `extensions`.
+    - Fehlende Listen kommen als `null`.
+    - DTD-Entities werden nicht aufgelöst.
 - **Git** in jeder PowerShell-Sitzung:
   ```powershell
   $git = 'C:\Users\thomas\AppData\Local\GitHubDesktop\app-3.6.7\resources\app\git\cmd\git.exe'
@@ -45,7 +52,7 @@ Spec: [2026-11-03-geotagger-design.md](../specs/2026-11-03-geotagger-design.md),
 ```
 src\main\java\tf\geotagger\track\
   TrackPoint.java        -- one GPX track point: time, lat, lon, optional elevation
-  GpxReader.java         -- read track points of a GPX 1.0 / 1.1 file (StAX), list GPX files of a folder
+  GpxReader.java         -- read track points of a GPX 1.0 / 1.1 file (Jackson XML), list GPX files of a folder
   TrackTimeline.java     -- all points of the loaded tracks sorted by time, neighbour search, load several files
 src\main\java\tf\geotagger\sync\
   CameraClock.java       -- capture time -> UTC (camera zone + offset), clock shown by the camera now
@@ -64,6 +71,7 @@ src\test\java\tf\geotagger\sync\
 ### Task 1: GPX lesen
 
 **Files:**
+- Modify: `build.gradle` (Jackson XML)
 - Create: `src\main\java\tf\geotagger\track\TrackPoint.java`, `GpxReader.java`
 - Test: `src\test\java\tf\geotagger\track\GpxReaderTest.java`
 
@@ -169,7 +177,19 @@ class GpxReaderTest {
 Run: `.\gradlew.bat test --tests "tf.geotagger.track.GpxReaderTest"`
 Expected: FAIL, Kompilierfehler „cannot find symbol: class GpxReader“.
 
-- [ ] **Step 3: Implementierung schreiben**
+- [ ] **Step 3: Jackson XML in `build.gradle` aufnehmen**
+
+In `build.gradle` kommen im Block `dependencies` nach `implementation 'tf.ExifToolHelper:ExifToolHelper:0.1'` diese Zeilen dazu:
+
+```groovy
+
+    // GPX is read with Jackson XML - the same data binding the other applications (e.g. GPXEditor) use
+    // BOM: one version for all jackson modules - same as GPXEditor
+    implementation platform('com.fasterxml.jackson:jackson-bom:2.21.2')
+    implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-xml'
+```
+
+- [ ] **Step 4: Implementierung schreiben**
 
 `src\main\java\tf\geotagger\track\TrackPoint.java`:
 
@@ -196,6 +216,11 @@ public record TrackPoint(Instant time, double latitude, double longitude, Double
 ```java
 package tf.geotagger.track;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.dataformat.xml.XmlMapper;
+import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlElementWrapper;
+import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlProperty;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -209,16 +234,39 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.stream.Stream;
-import javax.xml.stream.XMLInputFactory;
-import javax.xml.stream.XMLStreamConstants;
-import javax.xml.stream.XMLStreamException;
-import javax.xml.stream.XMLStreamReader;
 
 /**
- * Reads the track points (trk / trkseg / trkpt) of GPX 1.0 and 1.1 files - namespace independent.
- * Only time, position and elevation are needed for the track sync, everything else is ignored.
+ * Reads the track points (trk / trkseg / trkpt) of GPX 1.0 and 1.1 files.
+ *
+ * Jackson XML is used on purpose instead of the JDK's StAX parser: it is the data binding the other applications
+ * (e.g. GPXEditor) use as well, and consistency between them is preferred over saving a dependency.
+ * Element names are matched without namespace, so both GPX versions work. Only time, position and elevation are
+ * needed for the track sync - all other elements (wpt, rte, name, extensions, ...) are ignored.
  */
 public final class GpxReader {
+    // only the parts of the GPX schema we need - see https://www.topografix.com/GPX/1/1/
+    // lists are null if the element is missing
+    record Gpx(@JacksonXmlElementWrapper(useWrapping = false) @JacksonXmlProperty(localName = "trk") List<Trk> tracks) {
+    }
+
+    record Trk(@JacksonXmlElementWrapper(useWrapping = false) @JacksonXmlProperty(localName = "trkseg") List<Trkseg> segments) {
+    }
+
+    record Trkseg(@JacksonXmlElementWrapper(useWrapping = false) @JacksonXmlProperty(localName = "trkpt") List<Trkpt> points) {
+    }
+
+    record Trkpt(@JacksonXmlProperty(isAttribute = true, localName = "lat") Double latitude,
+            @JacksonXmlProperty(isAttribute = true, localName = "lon") Double longitude,
+            @JacksonXmlProperty(localName = "ele") Double elevation,
+            // parsed by ourselves: GPX 1.0 files sometimes lack the zone
+            @JacksonXmlProperty(localName = "time") String time) {
+    }
+
+    // thread safe once configured; Jackson XML doesn't resolve DTD entities
+    private static final XmlMapper MAPPER = XmlMapper.builder()
+            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+            .build();
+
     private GpxReader() {
     }
 
@@ -226,59 +274,23 @@ public final class GpxReader {
      * Track points in file order - points without time or position are skipped.
      */
     public static List<TrackPoint> read(Path gpx) throws IOException {
-        final XMLInputFactory factory = XMLInputFactory.newFactory();
-        // GPX files are plain data - no DTDs / external entities
-        factory.setProperty(XMLInputFactory.SUPPORT_DTD, false);
-        factory.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, false);
+        final Gpx content;
+        try (InputStream in = Files.newInputStream(gpx)) {
+            content = MAPPER.readValue(in, Gpx.class);
+        } catch (JsonProcessingException ex) {
+            throw new IOException("Can't read GPX file " + gpx + ": " + ex.getOriginalMessage(), ex);
+        }
 
         final List<TrackPoint> points = new ArrayList<>();
-        try (InputStream in = Files.newInputStream(gpx)) {
-            final XMLStreamReader reader = factory.createXMLStreamReader(in);
-            try {
-                int depth = 0;
-                // depth of the current trkpt element, -1 outside of a trkpt
-                int pointDepth = -1;
-                Double latitude = null;
-                Double longitude = null;
-                Double elevation = null;
-                Instant time = null;
-                while (reader.hasNext()) {
-                    final int event = reader.next();
-                    if (event == XMLStreamConstants.START_ELEMENT) {
-                        depth++;
-                        final String name = reader.getLocalName();
-                        if ("trkpt".equals(name)) {
-                            pointDepth = depth;
-                            latitude = toDouble(reader.getAttributeValue(null, "lat"));
-                            longitude = toDouble(reader.getAttributeValue(null, "lon"));
-                            elevation = null;
-                            time = null;
-                        } else if (pointDepth > 0 && depth == pointDepth + 1 && ("ele".equals(name) || "time".equals(name))) {
-                            // only direct children of trkpt - extensions may contain elements with the same name
-                            final String text = reader.getElementText();
-                            // getElementText() consumed the end element as well
-                            depth--;
-                            if ("ele".equals(name)) {
-                                elevation = toDouble(text);
-                            } else {
-                                time = toInstant(text);
-                            }
-                        }
-                    } else if (event == XMLStreamConstants.END_ELEMENT) {
-                        if (depth == pointDepth && "trkpt".equals(reader.getLocalName())) {
-                            if (time != null && latitude != null && longitude != null) {
-                                points.add(new TrackPoint(time, latitude, longitude, elevation));
-                            }
-                            pointDepth = -1;
-                        }
-                        depth--;
+        for (Trk track : nullToEmpty(content.tracks())) {
+            for (Trkseg segment : nullToEmpty(track.segments())) {
+                for (Trkpt point : nullToEmpty(segment.points())) {
+                    final Instant time = toInstant(point.time());
+                    if (time != null && point.latitude() != null && point.longitude() != null) {
+                        points.add(new TrackPoint(time, point.latitude(), point.longitude(), point.elevation()));
                     }
                 }
-            } finally {
-                reader.close();
             }
-        } catch (XMLStreamException ex) {
-            throw new IOException("Can't read GPX file " + gpx + ": " + ex.getMessage(), ex);
         }
         return points;
     }
@@ -296,18 +308,14 @@ public final class GpxReader {
         }
     }
 
-    private static Double toDouble(String text) {
-        if (text == null || text.isBlank()) {
-            return null;
-        }
-        try {
-            return Double.valueOf(text.trim());
-        } catch (NumberFormatException ex) {
-            return null;
-        }
+    private static <T> List<T> nullToEmpty(List<T> list) {
+        return list == null ? List.of() : list;
     }
 
     private static Instant toInstant(String text) {
+        if (text == null || text.isBlank()) {
+            return null;
+        }
         final String trimmed = text.trim();
         try {
             return OffsetDateTime.parse(trimmed).toInstant();
@@ -323,16 +331,18 @@ public final class GpxReader {
 }
 ```
 
-- [ ] **Step 4: Tests laufen lassen**
+Hinweis: Steht in `lat`, `lon` oder `ele` keine Zahl, schlägt Jackson für die ganze Datei fehl, statt nur den Punkt zu überspringen. Die Datei landet dann als fehlerhaft in der Track-Liste. Das ist gewollt: Solche Dateien sind kaputt, und ein stilles Weglassen würde Lücken im Track verstecken.
+
+- [ ] **Step 5: Tests laufen lassen**
 
 Run: `.\gradlew.bat test`
-Expected: BUILD SUCCESSFUL, 57 Tests grün (53 bisher + 4).
+Expected: BUILD SUCCESSFUL, 57 Tests grün (53 bisher + 4) und keine Compilerwarnungen.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```powershell
-& $git -C $app add src
-& $git -C $app commit -m "Read GPX track points with StAX"
+& $git -C $app add build.gradle src
+& $git -C $app commit -m "Read GPX track points with Jackson XML"
 ```
 
 ---

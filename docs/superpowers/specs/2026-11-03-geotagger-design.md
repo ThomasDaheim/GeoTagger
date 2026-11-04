@@ -123,7 +123,7 @@ Was GeoTagger liest und schreibt (Felder, Formatprofile, Schreibregeln), bleibt 
 | Paket | Verantwortung | Abhängigkeiten |
 |---|---|---|
 | `model` | `MediaFile`: Pfad, Typ, Originalwerte, ausstehende Änderungen, abgeleiteter Status. `MediaCollection`: beobachtbare Liste. | – |
-| `track` | `TrackPoint` (Zeit, Koordinate, Höhe), `GpxReader` (GPX 1.0/1.1 per StAX, ohne gpx-parser), `TrackTimeline` (zeitlich sortierte Punkte aller Tracks, Nachbarsuche) | – |
+| `track` | `TrackPoint` (Zeit, Koordinate, Höhe), `GpxReader` (GPX 1.0/1.1 per Jackson XML wie in den anderen Anwendungen, ohne gpx-parser), `TrackTimeline` (zeitlich sortierte Punkte aller Tracks, Nachbarsuche) | – |
 | `metadata` | Übersetzung zwischen `MediaFile` und ExifTool-Tags je Format, Lesen in Blöcken, Speichern, Sidecar-Rückfall | `model`, `tf.exiftool` |
 | `sync` | Track-Sync als reine Logik: Eingabe sind Tracks, Dateien und Parameter, Ausgabe ein Ergebnis je Datei | `model`, `track` |
 | `enrich` | Orts-, Höhen- und Zeitzonenabfrage für eine Dateimenge: Zusammenfassen, Drosselung, Cache, Fortschritt | `model`, `tf.geo.service` |
