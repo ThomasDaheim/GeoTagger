@@ -51,8 +51,10 @@ import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.MenuItem;
 import javafx.scene.control.ProgressBar;
 import javafx.scene.control.SelectionMode;
+import javafx.scene.control.SplitMenuButton;
 import javafx.scene.control.SplitPane;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
@@ -86,7 +88,7 @@ public class GeoTagger implements Initializable {
     private static final Path PREVIEW_CACHE = Path.of(System.getProperty("java.io.tmpdir"), "GeoTagger", "preview");
 
     @FXML
-    private Button openFolderButton;
+    private SplitMenuButton openFolderButton;
     @FXML
     private CheckBox includeSubfoldersCheck;
     @FXML
@@ -141,6 +143,7 @@ public class GeoTagger implements Initializable {
         initTable();
         initFilters();
         initPreview();
+        updateRecentFolders();
     }
 
     /**
@@ -301,9 +304,30 @@ public class GeoTagger implements Initializable {
         }
         final File selected = chooser.showDialog(stage);
         if (selected != null) {
-            GeoTaggerPreferences.RECENT_FOLDER.put(selected.getAbsolutePath());
-            GeoTaggerPreferences.INCLUDE_SUBFOLDERS.put(includeSubfoldersCheck.isSelected());
-            loadFolder(selected.toPath(), includeSubfoldersCheck.isSelected());
+            loadAndRemember(selected.toPath());
+        }
+    }
+
+    private void loadAndRemember(Path newFolder) {
+        GeoTaggerPreferences.RECENT_FOLDER.put(newFolder.toString());
+        GeoTaggerPreferences.INCLUDE_SUBFOLDERS.put(includeSubfoldersCheck.isSelected());
+        loadFolder(newFolder, includeSubfoldersCheck.isSelected());
+    }
+
+    // the drop down of "Open folder..." lists the recently opened folders, most recent first
+    private void updateRecentFolders() {
+        openFolderButton.getItems().clear();
+        for (String recent : GeoTaggerPreferences.getRecentFolders().getRecentFiles()) {
+            final MenuItem item = new MenuItem(recent);
+            // the text is a path - no mnemonics
+            item.setMnemonicParsing(false);
+            item.setOnAction(event -> loadAndRemember(Path.of(recent)));
+            openFolderButton.getItems().add(item);
+        }
+        if (openFolderButton.getItems().isEmpty()) {
+            final MenuItem none = new MenuItem("No recent folders");
+            none.setDisable(true);
+            openFolderButton.getItems().add(none);
         }
     }
 
@@ -329,6 +353,8 @@ public class GeoTagger implements Initializable {
             updateFilterCounts();
             stage.setTitle(GeoTaggerManager.TITLE + " - " + newFolder);
             statusLabel.setText(files.size() + " files in " + newFolder);
+            GeoTaggerPreferences.getRecentFolders().addRecentFile(newFolder.toString());
+            updateRecentFolders();
             select(0);
         });
         task.setOnFailed(event -> {

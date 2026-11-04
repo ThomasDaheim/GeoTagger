@@ -36,6 +36,7 @@ import java.util.prefs.Preferences;
 import tf.helper.general.GeneralParser;
 import tf.helper.general.IPreferencesStore;
 import tf.helper.general.ObjectsHelper;
+import tf.helper.general.RecentFiles;
 
 /**
  * Preferences of GeoTagger, stored with java.util.prefs - same pattern as GPXEditorPreferences.
@@ -60,6 +61,9 @@ public enum GeoTaggerPreferences implements IPreferencesStore {
 
     private static final Preferences MYPREFERENCES = Preferences.userNodeForPackage(GeoTaggerManager.class);
 
+    // recently opened folders - like the recent files of GPXEditor
+    private static final RecentFiles MYRECENTFOLDERS = new RecentFiles(INSTANCE, 10, true);
+
     private final String myPrefKey;
     private final String myDefaultValue;
     private final Class<?> myClass;
@@ -68,6 +72,10 @@ public enum GeoTaggerPreferences implements IPreferencesStore {
         myPrefKey = key;
         myDefaultValue = defaultValue;
         myClass = classP;
+    }
+
+    public static RecentFiles getRecentFolders() {
+        return MYRECENTFOLDERS;
     }
 
     public String getAsString() {
