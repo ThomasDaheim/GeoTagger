@@ -28,7 +28,9 @@ package tf.geotagger.sync;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import tf.geotagger.model.Field;
 import tf.geotagger.model.MediaFile;
+import tf.geotagger.model.MediaType;
 import tf.geotagger.sync.SyncResult.Status;
 import tf.geotagger.track.TrackPoint;
 import tf.geotagger.track.TrackTimeline;
@@ -43,6 +45,39 @@ public final class TrackSync {
 
     public static List<SyncResult> match(List<MediaFile> files, TrackTimeline timeline, SyncParameters parameters) {
         return files.stream().map(file -> match(file, timeline, parameters)).toList();
+    }
+
+    /**
+     * Files the sync should handle: candidates are all files ("Ohne Koordinaten") or the selection ("Auswahl").
+     */
+    public static List<MediaFile> eligible(List<MediaFile> candidates, boolean overwriteExisting) {
+        return candidates.stream().filter(file -> overwriteExisting || !file.hasCoordinates()).toList();
+    }
+
+    /**
+     * Sets the results with a position as pending changes - nothing is written to the files.
+     *
+     * @return number of changed files
+     */
+    public static int apply(List<SyncResult> results, SyncParameters parameters) {
+        int applied = 0;
+        for (SyncResult result : results) {
+            if (!result.hasPosition()) {
+                continue;
+            }
+            final MediaFile file = result.file();
+            file.set(Field.LATITUDE, result.latitude());
+            file.set(Field.LONGITUDE, result.longitude());
+            if (parameters.takeElevation() && result.elevation() != null) {
+                file.set(Field.ALTITUDE, result.elevation());
+            }
+            // videos get no time zone - see spec, section "Felder"
+            if (parameters.writeTimeZone() && file.mediaType() == MediaType.IMAGE) {
+                file.set(Field.TIME_OFFSET, parameters.cameraZone().getRules().getOffset(result.correctedTime()));
+            }
+            applied++;
+        }
+        return applied;
     }
 
     private static SyncResult match(MediaFile file, TrackTimeline timeline, SyncParameters parameters) {
