@@ -43,6 +43,11 @@ repositories {
 dependencies {
     implementation 'tf.ExifToolHelper:ExifToolHelper:0.1'
 
+    // GPX is read with Jackson XML - the same data binding the other applications (e.g. GPXEditor) use
+    // BOM: one version for all jackson modules - same as GPXEditor
+    implementation platform('com.fasterxml.jackson:jackson-bom:2.21.2')
+    implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-xml'
+
     testImplementation platform('org.junit:junit-bom:5.13.0')
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testImplementation 'org.junit.jupiter:junit-jupiter-params'
