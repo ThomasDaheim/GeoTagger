@@ -13,6 +13,8 @@
 
 Spec: [2026-11-03-geotagger-design.md](../specs/2026-11-03-geotagger-design.md)
 
+> **Stand nach der Umsetzung (2026-11-04):** Plan 1 ist umgesetzt. Danach ist der ExifTool-Wrapper aus GeoHelper (`tf.geo.exiftool`) in die eigene Library **ExifToolHelper** umgezogen (`D:\Thomas\Development\NetBeansProjects\ExifToolHelper`, Paket `tf.exiftool`, `tf.ExifToolHelper:ExifToolHelper:0.1`). Er soll ohne JavaFX und ohne Geo-Abhängigkeiten auch in PicExporter und GPXEditor nutzbar sein. GeoHelper ist bis Plan 4 leer. Die Tasks 1 und 2 unten beschreiben den ursprünglichen Stand.
+
 ## Einordnung: Fahrplan aller Pläne
 
 Die Spec umfasst mehrere Teilsysteme. Sie wird deshalb in Pläne aufgeteilt, und jeder Plan liefert für sich testbare Software. Jeder weitere Plan wird erst geschrieben, wenn der vorige umgesetzt ist, damit er auf dem echten Code aufbaut.

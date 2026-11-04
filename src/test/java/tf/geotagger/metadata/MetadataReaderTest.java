@@ -36,7 +36,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import tf.geo.exiftool.ExifTool;
+import tf.exiftool.ExifTool;
 import tf.geotagger.model.CaptureTime;
 import tf.geotagger.model.Field;
 import tf.geotagger.model.MediaFile;

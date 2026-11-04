@@ -89,7 +89,10 @@ Die konkrete Tag-Zuordnung je Format liegt gekapselt im Paket `metadata` und wir
 
 ### Repositories
 
-- **GeoTagger** (dieses Repo): die Anwendung. Sie hängt von GeoHelper und JavaHelper ab, nicht von GPXEditor.
+- **GeoTagger** (dieses Repo): die Anwendung. Sie hängt von ExifToolHelper, GeoHelper und JavaHelper ab, nicht von GPXEditor.
+- **ExifToolHelper** (neues Repo, Paket `tf.exiftool`, `tf.ExifToolHelper:ExifToolHelper`): der ExifTool-Wrapper.
+  - Er läuft als eigene Library ohne JavaFX und ohne Geo-Abhängigkeiten, damit auch PicExporter und `MakeImageJSON` in GPXEditor ihn später nutzen können.
+  - Bereitgestellt wird er über `publishToMavenLocal`.
 - **GeoHelper** (neues Repo, Paketpräfix `tf.geo`): wiederverwendbare Geo-Bausteine. Das Repo wird über `publishToMavenLocal` bereitgestellt, so wie JavaHelper.
 - **JavaHelper** (vorhanden, `tf.JavaHelper:JavaHelper:1.17`): Undo/Redo (`tf.helper.doundo`), Preferences, Tabellen-Einstellungen, Stage- und Alert-Helfer.
 
@@ -103,19 +106,27 @@ Build: Gradle, Java 25 und JavaFX 25.0.1, so wie in GPXEditor und JavaHelper.
 |---|---|---|
 | `tf.geo.map` | Leaflet-Karte in einer WebView: Layer, Marker, Cluster, Polylines für Tracks, Callbacks von JS nach Java (Klick, Drag, Rechtsklick) | `tf.gpx.edit.leafletmap` und `resources/leaflet/` aus GPXEditor, von `TrackMap` und den GPXEditor-Preferences gelöst |
 | `tf.geo.service` | Schnittstellen `ReverseGeocoder`, `ElevationProvider`, `TimeZoneLookup`. Implementierungen: Mapbox, GeoNames (neu), openrouteservice, SRTM, offline-timezone | `tf.gpx.edit.mapbox`, `tf.gpx.edit.elevation`, `TimeZoneProvider` aus GPXEditor |
-| `tf.geo.exiftool` | ExifTool-Wrapper über `-stay_open True -@ -`: Befehle per stdin, Antwortende über `{ready}`. Lesen als JSON (`-json -n -G1`), Binärausgabe (`-b -PreviewImage` / `-JpgFromRaw`), Schreiben. Thread-sicher durch eine Befehlswarteschlange. | neu; ersetzt die Nutzung von im4java |
-
 GeoHelper kennt GeoTagger nicht. Nur was die App braucht, wandert in die Library.
+
+### ExifToolHelper
+
+`tf.exiftool.ExifTool` ist ein Wrapper über `-stay_open True -@ -`:
+- Befehle gehen per stdin hinein, das Antwortende erkennt er am Marker `{ready}`.
+- Er liest als JSON (`-json -n -G1`), gibt Binärdaten aus (`-b -PreviewImage` / `-JpgFromRaw`) und schreibt.
+- Thread-sicher ist er durch eine Befehlswarteschlange.
+- Er ersetzt die bisherige Nutzung von im4java.
+
+Was GeoTagger liest und schreibt (Felder, Formatprofile, Schreibregeln), bleibt bewusst in GeoTagger. Die anderen Projekte brauchen andere Felder und haben eigene Modelle.
 
 ### GeoTagger-Pakete
 
 | Paket | Verantwortung | Abhängigkeiten |
 |---|---|---|
 | `model` | `MediaFile`: Pfad, Typ, Originalwerte, ausstehende Änderungen, abgeleiteter Status. `MediaCollection`: beobachtbare Liste. `GeoTrack`: Trackpunkte mit Zeit, Koordinate und Höhe. | – |
-| `metadata` | Übersetzung zwischen `MediaFile` und ExifTool-Tags je Format, Lesen in Blöcken, Speichern, Sidecar-Rückfall | `model`, `tf.geo.exiftool` |
+| `metadata` | Übersetzung zwischen `MediaFile` und ExifTool-Tags je Format, Lesen in Blöcken, Speichern, Sidecar-Rückfall | `model`, `tf.exiftool` |
 | `sync` | Track-Sync als reine Logik: Eingabe sind Tracks, Dateien und Parameter, Ausgabe ein Ergebnis je Datei | `model` |
 | `enrich` | Orts-, Höhen- und Zeitzonenabfrage für eine Dateimenge: Zusammenfassen, Drosselung, Cache, Fortschritt | `model`, `tf.geo.service` |
-| `preview` | Vorschau des ausgewählten Bildes. Das vorherige und das nächste werden vorab geladen, gehalten wird nur ein kleiner Speicher-Cache. JavaFX-Formate werden direkt gelesen, RAW und HEIC über das eingebettete JPEG aus ExifTool. | `model`, `tf.geo.exiftool` |
+| `preview` | Vorschau des ausgewählten Bildes. Das vorherige und das nächste werden vorab geladen, gehalten wird nur ein kleiner Speicher-Cache. JavaFX-Formate werden direkt gelesen, RAW und HEIC über das eingebettete JPEG aus ExifTool. | `model`, `tf.exiftool` |
 | `ui` | Hauptfenster, Sync-Dialog, Einstellungen, Undo-Aktionen | alle obigen, `tf.geo.map`, JavaHelper |
 
 Die Abhängigkeiten zeigen nur in eine Richtung: `ui` → `enrich` / `sync` / `metadata` / `preview` → `model`.
@@ -245,5 +256,4 @@ Diese Punkte gehören nicht zu Version 1. Das Design soll sie aber ohne Umbau zu
 
 ## Offene Punkte für die Planung
 
-- Mit welchem Schritt GeoHelper beginnt. Naheliegend ist zuerst `tf.geo.exiftool`, weil Lesen und Schreiben alles andere tragen.
-- Ob `-P` unter Windows auch das Erstellungsdatum erhält, klärt der erste Integrationstest.
+- Geklärt: `-P` erhält unter Windows auch das Erstellungsdatum (ExifTool 12.57). `MetadataWriter` stellt es zur Sicherheit trotzdem selbst wieder her.

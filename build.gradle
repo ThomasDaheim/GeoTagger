@@ -4,7 +4,8 @@
 //
 // Requirements
 //   - JDK 25 (Gradle toolchain) - Gradle 9 via gradlew
-//   - in the local maven repo (~/.m2): tf.GeoHelper:GeoHelper (build it there with "gradlew build")
+//   - in the local maven repo (~/.m2): tf.ExifToolHelper:ExifToolHelper (build it there with "gradlew build")
+//     tf.GeoHelper:GeoHelper follows with plan 4 (map)
 //   - ExifTool: tests look for it in EXIFTOOL_PATH and then on the PATH - without it they are skipped
 //
 // Main tasks
@@ -32,6 +33,7 @@ repositories {
     mavenLocal() {
         // only our own libraries come from the local repo - everything else from remote repos
         content {
+            includeGroup 'tf.ExifToolHelper'
             includeGroup 'tf.GeoHelper'
         }
     }
@@ -39,7 +41,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'tf.GeoHelper:GeoHelper:0.1'
+    implementation 'tf.ExifToolHelper:ExifToolHelper:0.1'
 
     testImplementation platform('org.junit:junit-bom:5.13.0')
     testImplementation 'org.junit.jupiter:junit-jupiter'

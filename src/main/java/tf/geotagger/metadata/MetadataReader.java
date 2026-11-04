@@ -37,7 +37,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.IntConsumer;
-import tf.geo.exiftool.ExifTool;
+import tf.exiftool.ExifTool;
 import tf.geotagger.model.Field;
 import tf.geotagger.model.MediaFile;
 import tf.geotagger.model.Snapshot;
