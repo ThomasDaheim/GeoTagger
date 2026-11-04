@@ -37,11 +37,11 @@ import org.junit.jupiter.api.Assumptions;
  * Finds the ExifTool executable for tests: environment variable EXIFTOOL_PATH first, then the PATH.
  * Tests call require() and are skipped if no ExifTool is installed.
  */
-final class ExifToolTestSupport {
+public final class ExifToolTestSupport {
     private ExifToolTestSupport() {
     }
 
-    static Optional<Path> locate() {
+    public static Optional<Path> locate() {
         final String configured = System.getenv("EXIFTOOL_PATH");
         if (configured != null && !configured.isBlank()) {
             final Path path = Path.of(configured.trim());
@@ -66,7 +66,7 @@ final class ExifToolTestSupport {
         return Optional.empty();
     }
 
-    static Path require() {
+    public static Path require() {
         final Optional<Path> exifTool = locate();
         Assumptions.assumeTrue(exifTool.isPresent(), "ExifTool not found - set EXIFTOOL_PATH or put exiftool on the PATH");
         return exifTool.get();

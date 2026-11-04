@@ -35,11 +35,11 @@ import javax.imageio.ImageIO;
 /**
  * Small images for tests - format from the file extension (jpg, png, tif).
  */
-final class TestFiles {
+public final class TestFiles {
     private TestFiles() {
     }
 
-    static Path image(Path dir, String name) {
+    public static Path image(Path dir, String name) {
         final Path file = dir.resolve(name);
         final String extension = name.substring(name.lastIndexOf('.') + 1).toLowerCase(Locale.ROOT);
         final String format = switch (extension) {
