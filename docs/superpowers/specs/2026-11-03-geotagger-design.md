@@ -122,9 +122,10 @@ Was GeoTagger liest und schreibt (Felder, Formatprofile, Schreibregeln), bleibt 
 
 | Paket | Verantwortung | Abhängigkeiten |
 |---|---|---|
-| `model` | `MediaFile`: Pfad, Typ, Originalwerte, ausstehende Änderungen, abgeleiteter Status. `MediaCollection`: beobachtbare Liste. `GeoTrack`: Trackpunkte mit Zeit, Koordinate und Höhe. | – |
+| `model` | `MediaFile`: Pfad, Typ, Originalwerte, ausstehende Änderungen, abgeleiteter Status. `MediaCollection`: beobachtbare Liste. | – |
+| `track` | `TrackPoint` (Zeit, Koordinate, Höhe), `GpxReader` (GPX 1.0/1.1 per StAX, ohne gpx-parser), `TrackTimeline` (zeitlich sortierte Punkte aller Tracks, Nachbarsuche) | – |
 | `metadata` | Übersetzung zwischen `MediaFile` und ExifTool-Tags je Format, Lesen in Blöcken, Speichern, Sidecar-Rückfall | `model`, `tf.exiftool` |
-| `sync` | Track-Sync als reine Logik: Eingabe sind Tracks, Dateien und Parameter, Ausgabe ein Ergebnis je Datei | `model` |
+| `sync` | Track-Sync als reine Logik: Eingabe sind Tracks, Dateien und Parameter, Ausgabe ein Ergebnis je Datei | `model`, `track` |
 | `enrich` | Orts-, Höhen- und Zeitzonenabfrage für eine Dateimenge: Zusammenfassen, Drosselung, Cache, Fortschritt | `model`, `tf.geo.service` |
 | `preview` | Vorschau des ausgewählten Bildes. Das vorherige und das nächste werden vorab geladen, gehalten wird nur ein kleiner Speicher-Cache. JavaFX-Formate werden direkt gelesen, RAW und HEIC über das eingebettete JPEG aus ExifTool. | `model`, `tf.exiftool` |
 | `ui` | Hauptfenster, Sync-Dialog, Einstellungen, Undo-Aktionen | alle obigen, `tf.geo.map`, JavaHelper |
