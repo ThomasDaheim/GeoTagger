@@ -109,11 +109,23 @@ public class PreviewPane extends BorderPane {
 
         scrollPane.viewportBoundsProperty().addListener((observable, oldValue, newValue) -> updateFit());
         actualSizeButton.selectedProperty().addListener((observable, oldValue, newValue) -> {
+            updateScrollBars();
             if (currentPreview != null) {
                 display(currentPreview);
             }
         });
+        updateScrollBars();
         clear();
+    }
+
+    // Scroll bars only for "100 %": a fitted image sized from the viewport could be one pixel too large after
+    // rounding - the scroll bar that appears shrinks the viewport, the image shrinks, the scroll bar disappears, ...
+    private void updateScrollBars() {
+        final ScrollPane.ScrollBarPolicy policy = actualSizeButton.isSelected()
+                ? ScrollPane.ScrollBarPolicy.AS_NEEDED
+                : ScrollPane.ScrollBarPolicy.NEVER;
+        scrollPane.setHbarPolicy(policy);
+        scrollPane.setVbarPolicy(policy);
     }
 
     /**
