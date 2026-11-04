@@ -4,3 +4,7 @@ build/
 *.iml
 .nb-gradle/
 nbproject/private/
+
+# real camera files for MetadataWriterTest.samplesRoundTrip - private and large, only the README is tracked
+src/test/resources/samples/*
+!src/test/resources/samples/README.md
