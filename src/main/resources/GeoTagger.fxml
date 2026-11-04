@@ -1,10 +1,68 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.CheckBox?>
 <?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ProgressBar?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.SplitPane?>
+<?import javafx.scene.control.TableColumn?>
+<?import javafx.scene.control.TableView?>
+<?import javafx.scene.control.ToolBar?>
 <?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.layout.VBox?>
 
 <BorderPane xmlns="http://javafx.com/javafx" xmlns:fx="http://javafx.com/fxml" fx:controller="tf.geotagger.main.GeoTagger">
+    <top>
+        <ToolBar>
+            <Button fx:id="openFolderButton" text="Open folder..." onAction="#openFolder" disable="true"/>
+            <CheckBox fx:id="includeSubfoldersCheck" text="Include subfolders"/>
+            <Separator orientation="VERTICAL"/>
+            <Button fx:id="preferencesButton" text="Preferences..." onAction="#showPreferences"/>
+        </ToolBar>
+    </top>
     <center>
-        <Label text="GeoTagger"/>
+        <SplitPane fx:id="centralSplit">
+            <SplitPane fx:id="leftSplit" orientation="VERTICAL">
+                <VBox>
+                    <HBox fx:id="filterBox" spacing="4">
+                        <padding>
+                            <Insets top="4" right="4" bottom="4" left="4"/>
+                        </padding>
+                    </HBox>
+                    <TableView fx:id="mediaTable" VBox.vgrow="ALWAYS">
+                        <columns>
+                            <TableColumn fx:id="nameColumn" text="Name" prefWidth="260"/>
+                            <TableColumn fx:id="captureTimeColumn" text="Capture time" prefWidth="150"/>
+                            <TableColumn fx:id="placeColumn" text="Place" prefWidth="140"/>
+                            <TableColumn fx:id="coordinatesStatusColumn" text="GPS" prefWidth="45"/>
+                            <TableColumn fx:id="placeStatusColumn" text="Loc." prefWidth="45"/>
+                            <TableColumn fx:id="altitudeStatusColumn" text="Alt." prefWidth="45"/>
+                        </columns>
+                        <placeholder>
+                            <Label text="Open a folder to see its photos and videos"/>
+                        </placeholder>
+                    </TableView>
+                </VBox>
+                <StackPane>
+                    <Label text="The preview follows in the next step"/>
+                </StackPane>
+            </SplitPane>
+            <StackPane>
+                <Label text="Map, details and tracks follow in the next steps" wrapText="true"/>
+            </StackPane>
+        </SplitPane>
     </center>
+    <bottom>
+        <HBox spacing="8" alignment="CENTER_LEFT">
+            <padding>
+                <Insets top="4" right="8" bottom="4" left="8"/>
+            </padding>
+            <Label fx:id="statusLabel" maxWidth="Infinity" HBox.hgrow="ALWAYS"/>
+            <ProgressBar fx:id="progressBar" prefWidth="200" visible="false"/>
+        </HBox>
+    </bottom>
 </BorderPane>

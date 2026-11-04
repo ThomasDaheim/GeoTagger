@@ -25,34 +25,325 @@
  */
 package tf.geotagger.main;
 
+import java.io.File;
+import java.io.IOException;
 import java.net.URL;
+import java.nio.file.InvalidPathException;
+import java.nio.file.Path;
+import java.time.format.DateTimeFormatter;
+import java.util.EnumMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.ResourceBundle;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import javafx.beans.property.ReadOnlyStringWrapper;
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
+import javafx.collections.transformation.FilteredList;
+import javafx.collections.transformation.SortedList;
+import javafx.concurrent.Task;
+import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
+import javafx.scene.control.Alert;
+import javafx.scene.control.Button;
+import javafx.scene.control.CheckBox;
+import javafx.scene.control.Label;
+import javafx.scene.control.ProgressBar;
+import javafx.scene.control.SelectionMode;
+import javafx.scene.control.SplitPane;
+import javafx.scene.control.TableColumn;
+import javafx.scene.control.TableView;
+import javafx.scene.control.ToggleButton;
+import javafx.scene.control.ToggleGroup;
+import javafx.scene.layout.HBox;
+import javafx.stage.DirectoryChooser;
 import javafx.stage.Stage;
+import tf.exiftool.ExifTool;
+import tf.exiftool.ExifToolException;
+import tf.geotagger.files.FolderScanner;
+import tf.geotagger.metadata.ExifToolLocator;
+import tf.geotagger.metadata.MetadataReader;
+import tf.geotagger.model.CaptureTime;
+import tf.geotagger.model.Field;
+import tf.geotagger.model.MediaFile;
+import tf.geotagger.model.MediaFilter;
+import tf.helper.javafx.ShowAlerts;
+import tf.helper.javafx.TableViewPreferences;
 
 /**
- * Controller of the main window (GeoTagger.fxml).
+ * Controller of the main window (GeoTagger.fxml): ExifTool start, folder loading, file list with filters.
  */
 public class GeoTagger implements Initializable {
+    private static final String TABLE_PREFERENCES = "mediaTable";
+    private static final DateTimeFormatter CAPTURE_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private static final String YES = "\u2713";
+    private static final String NO = "\u2013";
+
+    @FXML
+    private Button openFolderButton;
+    @FXML
+    private CheckBox includeSubfoldersCheck;
+    @FXML
+    private Button preferencesButton;
+    @FXML
+    private SplitPane centralSplit;
+    @FXML
+    private SplitPane leftSplit;
+    @FXML
+    private HBox filterBox;
+    @FXML
+    private TableView<MediaFile> mediaTable;
+    @FXML
+    private TableColumn<MediaFile, String> nameColumn;
+    @FXML
+    private TableColumn<MediaFile, String> captureTimeColumn;
+    @FXML
+    private TableColumn<MediaFile, String> placeColumn;
+    @FXML
+    private TableColumn<MediaFile, String> coordinatesStatusColumn;
+    @FXML
+    private TableColumn<MediaFile, String> placeStatusColumn;
+    @FXML
+    private TableColumn<MediaFile, String> altitudeStatusColumn;
+    @FXML
+    private Label statusLabel;
+    @FXML
+    private ProgressBar progressBar;
+
+    private final ObservableList<MediaFile> files = FXCollections.observableArrayList();
+    private final FilteredList<MediaFile> filteredFiles = new FilteredList<>(files);
+    private final ToggleGroup filterGroup = new ToggleGroup();
+    private final Map<MediaFilter, ToggleButton> filterButtons = new EnumMap<>(MediaFilter.class);
+    // one loader thread - ExifTool handles one command at a time anyway
+    private final ExecutorService loader = Executors.newSingleThreadExecutor(runnable -> {
+        final Thread thread = new Thread(runnable, "GeoTagger-loader");
+        thread.setDaemon(true);
+        return thread;
+    });
+
     private Stage stage;
+    // folder the files were loaded from - names are shown relative to it
+    private Path folder;
+    private ExifTool exifTool;
+    private MetadataReader reader;
 
     @Override
     public void initialize(URL location, ResourceBundle resources) {
+        initTable();
+        initFilters();
     }
 
     /**
-     * Called once the stage is shown.
+     * Called once the stage is shown: restores the layout and starts ExifTool.
      *
      * @param stage the main window
      */
     public void lateInitialize(Stage stage) {
         this.stage = stage;
-        this.stage.setTitle(GeoTaggerManager.TITLE);
+        final Boolean includeSubfolders = GeoTaggerPreferences.INCLUDE_SUBFOLDERS.getAsType();
+        includeSubfoldersCheck.setSelected(includeSubfolders);
+        final Double centralDivider = GeoTaggerPreferences.RECENT_CENTRAL_DIVIDER_POS.getAsType();
+        centralSplit.setDividerPositions(centralDivider);
+        final Double leftDivider = GeoTaggerPreferences.RECENT_LEFT_DIVIDER_POS.getAsType();
+        leftSplit.setDividerPositions(leftDivider);
+        TableViewPreferences.loadTableViewPreferences(mediaTable, TABLE_PREFERENCES, GeoTaggerPreferences.INSTANCE);
+        initExifTool();
     }
 
     /**
      * Saves the layout and stops background work - called when GeoTagger ends.
      */
     public void stop() {
+        GeoTaggerPreferences.RECENT_CENTRAL_DIVIDER_POS.put(centralSplit.getDividerPositions()[0]);
+        GeoTaggerPreferences.RECENT_LEFT_DIVIDER_POS.put(leftSplit.getDividerPositions()[0]);
+        GeoTaggerPreferences.INCLUDE_SUBFOLDERS.put(includeSubfoldersCheck.isSelected());
+        TableViewPreferences.saveTableViewPreferences(mediaTable, TABLE_PREFERENCES, GeoTaggerPreferences.INSTANCE);
+        loader.shutdownNow();
+        closeExifTool();
+    }
+
+    private void initTable() {
+        final SortedList<MediaFile> sortedFiles = new SortedList<>(filteredFiles);
+        sortedFiles.comparatorProperty().bind(mediaTable.comparatorProperty());
+        mediaTable.setItems(sortedFiles);
+        mediaTable.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
+
+        nameColumn.setCellValueFactory(cell -> new ReadOnlyStringWrapper(displayName(cell.getValue())));
+        captureTimeColumn.setCellValueFactory(cell -> new ReadOnlyStringWrapper(captureTime(cell.getValue())));
+        placeColumn.setCellValueFactory(cell -> new ReadOnlyStringWrapper(place(cell.getValue())));
+        coordinatesStatusColumn.setCellValueFactory(cell -> new ReadOnlyStringWrapper(status(cell.getValue().hasCoordinates())));
+        placeStatusColumn.setCellValueFactory(cell -> new ReadOnlyStringWrapper(status(cell.getValue().hasPlace())));
+        altitudeStatusColumn.setCellValueFactory(cell -> new ReadOnlyStringWrapper(status(cell.getValue().hasAltitude())));
+    }
+
+    private void initFilters() {
+        for (MediaFilter filter : MediaFilter.values()) {
+            final ToggleButton button = new ToggleButton(filter.label());
+            button.setToggleGroup(filterGroup);
+            button.setUserData(filter);
+            filterButtons.put(filter, button);
+            filterBox.getChildren().add(button);
+        }
+        filterGroup.selectedToggleProperty().addListener((observable, oldToggle, newToggle) -> {
+            if (newToggle == null) {
+                // one filter is always active
+                oldToggle.setSelected(true);
+                return;
+            }
+            filteredFiles.setPredicate((MediaFilter) newToggle.getUserData());
+        });
+        filterButtons.get(MediaFilter.ALL).setSelected(true);
+        updateFilterCounts();
+    }
+
+    private void updateFilterCounts() {
+        MediaFilter.counts(files).forEach((filter, count) -> filterButtons.get(filter).setText(filter.label() + " (" + count + ")"));
+    }
+
+    private void initExifTool() {
+        if (GeoTaggerPreferences.EXIFTOOL_PATH.getAsString().isBlank()) {
+            ExifToolLocator.findOnPath().ifPresent(found -> GeoTaggerPreferences.EXIFTOOL_PATH.put(found.toString()));
+        }
+        if (!applyExifTool()) {
+            ShowAlerts.getInstance().showAlert(Alert.AlertType.WARNING, GeoTaggerManager.TITLE, "ExifTool not found",
+                    "GeoTagger reads and writes metadata with ExifTool. Please select the ExifTool executable.");
+            showPreferences();
+        }
+    }
+
+    /**
+     * (Re)starts ExifTool with the executable from the preferences.
+     *
+     * @return true if ExifTool is usable - otherwise no folder can be opened
+     */
+    private boolean applyExifTool() {
+        closeExifTool();
+        final String configured = GeoTaggerPreferences.EXIFTOOL_PATH.getAsString();
+        try {
+            final Path executable = Path.of(configured);
+            final String version = ExifToolLocator.version(executable);
+            exifTool = new ExifTool(executable);
+            reader = new MetadataReader(exifTool);
+            openFolderButton.setDisable(false);
+            statusLabel.setText("ExifTool " + version + " - " + executable);
+            return true;
+        } catch (ExifToolException | InvalidPathException ex) {
+            openFolderButton.setDisable(true);
+            statusLabel.setText("ExifTool not usable - please check the preferences");
+            return false;
+        }
+    }
+
+    private void closeExifTool() {
+        if (exifTool != null) {
+            exifTool.close();
+            exifTool = null;
+            reader = null;
+        }
+    }
+
+    @FXML
+    private void showPreferences() {
+        if (PreferenceEditor.getInstance().editPreferences()) {
+            applyExifTool();
+        }
+    }
+
+    @FXML
+    private void openFolder() {
+        final DirectoryChooser chooser = new DirectoryChooser();
+        chooser.setTitle("Open folder");
+        final File recent = new File(GeoTaggerPreferences.RECENT_FOLDER.getAsString());
+        if (recent.isDirectory()) {
+            chooser.setInitialDirectory(recent);
+        }
+        final File selected = chooser.showDialog(stage);
+        if (selected != null) {
+            GeoTaggerPreferences.RECENT_FOLDER.put(selected.getAbsolutePath());
+            GeoTaggerPreferences.INCLUDE_SUBFOLDERS.put(includeSubfoldersCheck.isSelected());
+            loadFolder(selected.toPath(), includeSubfoldersCheck.isSelected());
+        }
+    }
+
+    private void loadFolder(Path newFolder, boolean includeSubfolders) {
+        final MetadataReader folderReader = reader;
+        final Task<List<MediaFile>> task = new Task<>() {
+            @Override
+            protected List<MediaFile> call() throws IOException {
+                updateMessage("Searching " + newFolder + " ...");
+                final List<Path> mediaFiles = FolderScanner.scan(newFolder, includeSubfolders).mediaFiles();
+                final int total = mediaFiles.size();
+                updateProgress(0, total);
+                return folderReader.read(mediaFiles, done -> {
+                    updateProgress(done, total);
+                    updateMessage("Reading metadata: " + done + " / " + total);
+                });
+            }
+        };
+        task.setOnSucceeded(event -> {
+            finishLoading();
+            folder = newFolder;
+            files.setAll(task.getValue());
+            updateFilterCounts();
+            stage.setTitle(GeoTaggerManager.TITLE + " - " + newFolder);
+            statusLabel.setText(files.size() + " files in " + newFolder);
+            select(0);
+        });
+        task.setOnFailed(event -> {
+            finishLoading();
+            statusLabel.setText("Loading " + newFolder + " failed");
+            ShowAlerts.getInstance().showAlert(Alert.AlertType.ERROR, GeoTaggerManager.TITLE, "Can't load " + newFolder,
+                    String.valueOf(task.getException().getMessage()));
+        });
+
+        statusLabel.textProperty().bind(task.messageProperty());
+        progressBar.progressProperty().bind(task.progressProperty());
+        progressBar.setVisible(true);
+        setBusy(true);
+        loader.submit(task);
+    }
+
+    private void finishLoading() {
+        statusLabel.textProperty().unbind();
+        progressBar.progressProperty().unbind();
+        progressBar.setVisible(false);
+        setBusy(false);
+    }
+
+    private void setBusy(boolean busy) {
+        openFolderButton.setDisable(busy);
+        includeSubfoldersCheck.setDisable(busy);
+        preferencesButton.setDisable(busy);
+    }
+
+    private void select(int index) {
+        if (index >= 0 && index < mediaTable.getItems().size()) {
+            mediaTable.getSelectionModel().clearAndSelect(index);
+            mediaTable.scrollTo(index);
+        }
+    }
+
+    private String displayName(MediaFile file) {
+        // with sub folders the path below the opened folder tells the files apart
+        return folder == null ? file.path().getFileName().toString() : folder.relativize(file.path()).toString();
+    }
+
+    private static String captureTime(MediaFile file) {
+        final CaptureTime time = file.captureTime();
+        if (time == null) {
+            return "";
+        }
+        return CAPTURE_TIME.format(time.dateTime()) + (time.utc() ? " UTC" : "");
+    }
+
+    private static String place(MediaFile file) {
+        final String city = file.text(Field.CITY);
+        return city != null ? city : Objects.requireNonNullElse(file.text(Field.COUNTRY), "");
+    }
+
+    private static String status(boolean present) {
+        return present ? YES : NO;
     }
 }
