@@ -120,10 +120,18 @@ public final class GpxReader {
         try (Stream<Path> files = Files.list(dir)) {
             return files
                     .filter(Files::isRegularFile)
-                    .filter(file -> file.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".gpx"))
+                    .filter(GpxReader::isGpxFile)
                     .sorted()
                     .toList();
         }
+    }
+
+    /**
+     * @param file file to check
+     * @return true if the file name ends with .gpx (case insensitive)
+     */
+    public static boolean isGpxFile(Path file) {
+        return file.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".gpx");
     }
 
     private static <T> List<T> nullToEmpty(List<T> list) {
