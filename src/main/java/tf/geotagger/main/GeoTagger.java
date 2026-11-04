@@ -31,6 +31,7 @@ import java.net.URL;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
@@ -69,6 +70,7 @@ import tf.geotagger.model.CaptureTime;
 import tf.geotagger.model.Field;
 import tf.geotagger.model.MediaFile;
 import tf.geotagger.model.MediaFilter;
+import tf.geotagger.preview.PreviewProvider;
 import tf.helper.javafx.ShowAlerts;
 import tf.helper.javafx.TableViewPreferences;
 
@@ -80,6 +82,8 @@ public class GeoTagger implements Initializable {
     private static final DateTimeFormatter CAPTURE_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final String YES = "\u2713";
     private static final String NO = "\u2013";
+    // extracted previews of RAW / HEIC / videos - emptied when GeoTagger ends
+    private static final Path PREVIEW_CACHE = Path.of(System.getProperty("java.io.tmpdir"), "GeoTagger", "preview");
 
     @FXML
     private Button openFolderButton;
@@ -111,6 +115,8 @@ public class GeoTagger implements Initializable {
     private Label statusLabel;
     @FXML
     private ProgressBar progressBar;
+    @FXML
+    private PreviewPane previewPane;
 
     private final ObservableList<MediaFile> files = FXCollections.observableArrayList();
     private final FilteredList<MediaFile> filteredFiles = new FilteredList<>(files);
@@ -128,11 +134,13 @@ public class GeoTagger implements Initializable {
     private Path folder;
     private ExifTool exifTool;
     private MetadataReader reader;
+    private PreviewProvider previewProvider;
 
     @Override
     public void initialize(URL location, ResourceBundle resources) {
         initTable();
         initFilters();
+        initPreview();
     }
 
     /**
@@ -161,7 +169,11 @@ public class GeoTagger implements Initializable {
         GeoTaggerPreferences.INCLUDE_SUBFOLDERS.put(includeSubfoldersCheck.isSelected());
         TableViewPreferences.saveTableViewPreferences(mediaTable, TABLE_PREFERENCES, GeoTaggerPreferences.INSTANCE);
         loader.shutdownNow();
+        previewPane.dispose();
         closeExifTool();
+        if (previewProvider != null) {
+            previewProvider.clearCache();
+        }
     }
 
     private void initTable() {
@@ -202,6 +214,31 @@ public class GeoTagger implements Initializable {
         MediaFilter.counts(files).forEach((filter, count) -> filterButtons.get(filter).setText(filter.label() + " (" + count + ")"));
     }
 
+    private void initPreview() {
+        mediaTable.getSelectionModel().selectedItemProperty().addListener((observable, oldFile, newFile) -> showPreview(newFile));
+        previewPane.getFirstButton().setOnAction(event -> select(0));
+        previewPane.getPreviousButton().setOnAction(event -> select(mediaTable.getSelectionModel().getSelectedIndex() - 1));
+        previewPane.getNextButton().setOnAction(event -> select(mediaTable.getSelectionModel().getSelectedIndex() + 1));
+        previewPane.getLastButton().setOnAction(event -> select(mediaTable.getItems().size() - 1));
+    }
+
+    private void showPreview(MediaFile file) {
+        if (file == null) {
+            previewPane.clear();
+            return;
+        }
+        final List<MediaFile> items = mediaTable.getItems();
+        final int index = items.indexOf(file);
+        final List<MediaFile> neighbours = new ArrayList<>();
+        if (index > 0) {
+            neighbours.add(items.get(index - 1));
+        }
+        if (index >= 0 && index + 1 < items.size()) {
+            neighbours.add(items.get(index + 1));
+        }
+        previewPane.show(file, neighbours);
+    }
+
     private void initExifTool() {
         if (GeoTaggerPreferences.EXIFTOOL_PATH.getAsString().isBlank()) {
             ExifToolLocator.findOnPath().ifPresent(found -> GeoTaggerPreferences.EXIFTOOL_PATH.put(found.toString()));
@@ -226,10 +263,13 @@ public class GeoTagger implements Initializable {
             final String version = ExifToolLocator.version(executable);
             exifTool = new ExifTool(executable);
             reader = new MetadataReader(exifTool);
+            previewProvider = new PreviewProvider(exifTool, PREVIEW_CACHE);
+            previewPane.setPreviewProvider(previewProvider);
             openFolderButton.setDisable(false);
             statusLabel.setText("ExifTool " + version + " - " + executable);
             return true;
         } catch (ExifToolException | InvalidPathException ex) {
+            previewPane.setPreviewProvider(null);
             openFolderButton.setDisable(true);
             statusLabel.setText("ExifTool not usable - please check the preferences");
             return false;
