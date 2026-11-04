@@ -36,6 +36,7 @@ Die Spec umfasst mehrere Teilsysteme. Sie wird deshalb in Pläne aufgeteilt, und
 - `mavenLocal()` liefert nur eigene Libraries (`content { includeGroup ... }`), alles andere kommt aus `mavenCentral()`.
 - Paketpräfixe: `tf.geo.*` (GeoHelper), `tf.geotagger.*` (GeoTagger).
 - Code und Kommentare sind auf Englisch, wie in GPXEditor und JavaHelper. Doku und Plan sind auf Deutsch.
+- **Lizenz-Header:** Jede `.java`-Datei, auch in `src/test`, beginnt mit dem BSD-Header aus GPXEditor („Copyright (c) 2014ff Thomas Feuster“, 25 Zeilen, wörtlich übernommen, z. B. aus `GPXEditor\src\main\java\tf\gpx\edit\leafletmap\MapLayer.java`). Die Codeblöcke in diesem Plan lassen ihn der Kürze halber weg.
 - Compilerwarnungen gelten auch in `src/test` als Fehler, die zu beheben sind (`-Xlint:unchecked`, `-Xlint:deprecation`).
 - Arbeitsbranch ist jeweils der durch `git init` entstandene Branch (`master`). Es gibt keine Feature-Branches und keine PRs.
 - **Git** ist nicht im PATH. In jeder PowerShell-Sitzung zuerst:
