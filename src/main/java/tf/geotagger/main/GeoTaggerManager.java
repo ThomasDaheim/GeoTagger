@@ -83,6 +83,10 @@ public class GeoTaggerManager extends Application {
         myStage.setTitle(TITLE);
         new JMetro(Style.LIGHT).setScene(myStage.getScene());
         myStage.show();
+        // started from another application (e.g. NetBeans) Windows doesn't bring the window to the front -
+        // briefly "always on top" does, same trick as the splash screen of GPXEditor
+        myStage.setAlwaysOnTop(true);
+        myStage.setAlwaysOnTop(false);
 
         myGeoTagger.lateInitialize(myStage);
     }
