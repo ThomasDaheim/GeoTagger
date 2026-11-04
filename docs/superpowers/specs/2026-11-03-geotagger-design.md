@@ -4,7 +4,7 @@ Stand: 2026-11-03 · Status: Entwurf, abgestimmt im Brainstorming
 
 ## Ziel
 
-GeoTagger ersetzt die Teile von GeoSetter 4.0.49, die im eigenen Foto-Workflow gebraucht werden. GeoSetter wird nicht mehr weiterentwickelt. GeoTagger ist eine eigenständige Java/JavaFX-Anwendung für Windows.
+GeoTagger ersetzt die Teile von GeoSetter 4.0.49, die im eigenen Foto-Workflow gebraucht werden. GeoSetter wird nicht mehr weiterentwickelt. GeoTagger ist eine eigenständige Java/JavaFX-Anwendung für Windows. Die Oberfläche ist englisch wie bei GPXEditor, die deutschen Beschriftungen in dieser Spec und in den Mockups sind nur Illustration.
 
 Referenz-Screenshots des Originals:
 
@@ -54,7 +54,7 @@ Videos durchlaufen denselben Ablauf.
 ### Bewusst nicht in Version 1
 
 - Thumbnail-Raster. Die Liste und die große Vorschau reichen, so wie in GeoSetter.
-- Video-Vorschaubilder. Videos zeigen einen Platzhalter.
+- Eigene Vorschaubilder für Videos, etwa per ffmpeg. Hat ein Video ein eingebettetes Vorschaubild (z. B. Canon `ThumbnailImage`), wird dieses gezeigt, sonst ein Platzhalter.
 - Aufnahmerichtung bzw. Kompassdaten. Vorhandene Werte bleiben aber erhalten, siehe [Schreibregeln](#schreibregeln) und [Mögliche nächste Schritte](#mögliche-nächste-schritte).
 - Favoriten, Ortssuche, direkte Koordinateneingabe.
 - Titel, Beschreibung, Stichwörter.
