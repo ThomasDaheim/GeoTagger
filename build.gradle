@@ -4,24 +4,34 @@
 //
 // Requirements
 //   - JDK 25 (Gradle toolchain) - Gradle 9 via gradlew
-//   - in the local maven repo (~/.m2): tf.ExifToolHelper:ExifToolHelper (build it there with "gradlew build")
-//     tf.GeoHelper:GeoHelper follows with plan 4 (map)
-//   - ExifTool: tests look for it in EXIFTOOL_PATH and then on the PATH - without it they are skipped
+//   - in the local maven repo (~/.m2): tf.ExifToolHelper:ExifToolHelper and tf.JavaHelper:JavaHelper
+//     (build them in their projects with "gradlew build"); tf.GeoHelper:GeoHelper follows with plan 4 (map)
+//   - ExifTool: the application asks for it in the preferences; tests look for it in EXIFTOOL_PATH and then on the
+//     PATH - without it they are skipped
 //
 // Main tasks
 //   gradlew build -> compile + test
-//   gradlew test  -> all tests
+//   gradlew run   -> start GeoTagger
 //
-// JavaFX, JavaHelper and the application setup follow with plan 3 (main window).
+// How JavaFX is wired - same approach as GPXEditor (GeoTagger is non-modular, i.e. runs from the classpath)
+//   - compile / test: JavaFX jars on the classpath are sufficient (tests don't start the JavaFX toolkit)
+//   - run: the JavaFX jars of the current platform are put on the module path, all other jars stay on the classpath
+//   - start scripts (installDist) and jpackage follow later, once there is something to install
 // =====================================================================================================================
 
 plugins {
     id 'java'
+    id 'application'
+    id 'com.google.osdetector' version '1.7.3'
 }
 
 group = 'tf.GeoTagger'
 version = '0.1'
 description = 'GeoTagger - JavaFX replacement for the parts of GeoSetter that are still needed'
+
+// classifier of the platform specific JavaFX jars (win / mac / linux)
+def fxPlatform = osdetector.os == 'osx' ? 'mac' : osdetector.os == 'windows' ? 'win' : osdetector.os
+def javafxVersion = '25.0.1'
 
 java {
     toolchain {
@@ -31,17 +41,34 @@ java {
 
 repositories {
     mavenLocal() {
+        // breaking change in gradle 6.*: doesn't find jar files automatically when no pom.xml is present...
+        metadataSources {
+            mavenPom()
+            artifact()
+        }
         // only our own libraries come from the local repo - everything else from remote repos
         content {
             includeGroup 'tf.ExifToolHelper'
             includeGroup 'tf.GeoHelper'
+            includeGroup 'tf.JavaHelper'
         }
     }
     mavenCentral()
 }
 
 dependencies {
+    // JavaFX explicit dependencies
+    implementation "org.openjfx:javafx-base:$javafxVersion:$fxPlatform"
+    implementation "org.openjfx:javafx-graphics:$javafxVersion:$fxPlatform"
+    implementation "org.openjfx:javafx-controls:$javafxVersion:$fxPlatform"
+    implementation "org.openjfx:javafx-fxml:$javafxVersion:$fxPlatform"
+
+    // our own helper libraries
+    implementation 'tf.JavaHelper:JavaHelper:1.17'
     implementation 'tf.ExifToolHelper:ExifToolHelper:0.1'
+
+    // same look as GPXEditor
+    implementation 'org.jfxtras:jmetro:11.6.16'
 
     // GPX is read with Jackson XML - the same data binding the other applications (e.g. GPXEditor) use
     // BOM: one version for all jackson modules - same as GPXEditor
@@ -64,4 +91,53 @@ tasks.named('test', Test) {
     useJUnitPlatform()
     systemProperty 'java.awt.headless', 'true'
     testLogging.showStandardStreams = true
+}
+
+// JavaFX needs to be on the module path at runtime - only the platform specific jars
+// maven delivers each JavaFX module twice: an empty javafx-base-25.0.1.jar and the real javafx-base-25.0.1-win.jar - keep only the latter
+def javafxJars = configurations.runtimeClasspath.filter { it.name.startsWith('javafx-') && !(it.name ==~ /javafx-[a-z]+-[\d.]+\.jar/) }
+
+// adds "--module-path <files>" to the JVM of run - evaluated lazily when the task executes (same as GPXEditor)
+abstract class ModulePathArgumentProvider implements CommandLineArgumentProvider {
+    @InputFiles
+    @PathSensitive(PathSensitivity.NAME_ONLY)
+    abstract ConfigurableFileCollection getModulePath()
+
+    @Override
+    Iterable<String> asArguments() {
+        return ['--module-path', modulePath.asPath]
+    }
+}
+
+// JVM options needed to run GeoTagger - JMetro and JavaHelper use JavaFX internals (exports as in GPXEditor)
+def jvmFlags = ['--add-modules', 'javafx.controls,javafx.graphics,javafx.base,javafx.fxml',
+                '--add-exports', 'javafx.graphics/com.sun.javafx.util=ALL-UNNAMED',
+                '--add-exports', 'javafx.base/com.sun.javafx.reflect=ALL-UNNAMED',
+                '--add-exports', 'javafx.base/com.sun.javafx.beans=ALL-UNNAMED',
+                '--add-exports', 'javafx.base/com.sun.javafx.logging=ALL-UNNAMED',
+                '--add-exports', 'javafx.base/com.sun.javafx.runtime=ALL-UNNAMED',
+                '--add-exports', 'javafx.base/com.sun.javafx.collections=ALL-UNNAMED',
+                '--add-exports', 'javafx.base/com.sun.javafx.event=ALL-UNNAMED',
+                '--add-exports', 'javafx.graphics/com.sun.prism=ALL-UNNAMED',
+                '--add-exports', 'javafx.graphics/com.sun.javafx.sg.prism=ALL-UNNAMED',
+                '--add-exports', 'javafx.graphics/com.sun.javafx.scene=ALL-UNNAMED',
+                '--add-exports', 'javafx.controls/com.sun.javafx.scene.control=ALL-UNNAMED',
+                '--add-exports', 'javafx.controls/com.sun.javafx.scene.control.behavior=ALL-UNNAMED',
+                '--add-exports', 'javafx.controls/com.sun.javafx.scene.control.inputmap=ALL-UNNAMED',
+                '--add-exports', 'javafx.graphics/com.sun.javafx.scene.traversal=ALL-UNNAMED',
+                '--add-exports', 'javafx.graphics/com.sun.javafx.tk=ALL-UNNAMED',
+                '--add-exports', 'javafx.graphics/com.sun.javafx.scene.input=ALL-UNNAMED',
+                '--add-opens', 'javafx.graphics/javafx.scene.layout=ALL-UNNAMED',
+                '--enable-native-access', 'javafx.graphics',
+                '--enable-native-access', 'ALL-UNNAMED',
+    ]
+
+application {
+    mainClass = 'tf.geotagger.main.GeoTaggerManager'
+    applicationDefaultJvmArgs = jvmFlags + ['-enableassertions']
+}
+
+tasks.named('run', JavaExec) {
+    jvmArgumentProviders.add(objects.newInstance(ModulePathArgumentProvider).tap { modulePath.from(javafxJars) })
+    enableAssertions = true
 }
