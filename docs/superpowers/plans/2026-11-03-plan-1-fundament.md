@@ -27,6 +27,7 @@ Die Spec umfasst mehrere Teilsysteme. Sie wird deshalb in Pläne aufgeteilt, und
 | 4 – Karte | `tf.geo.map` aus GPXEditor nach GeoHelper portieren. Marker mit Clustering, Drag & Drop, Rechtsklick, Track-Liste und Track-Anzeige. | Koordinaten über die Karte setzen |
 | 5 – Anreichern | `tf.geo.service`: Mapbox, GeoNames, openrouteservice, SRTM, Zeitzone. Dazu `enrich` mit Raster-Cache und Drosselung. | Ort, Höhe und Zeitzone ermitteln |
 | 6 – Sync-Dialog | Dialog mit Live-Vorschau auf Basis von Plan 2 | Vollständiger Workflow |
+| Abschluss – GeoSetter ablösen | Siehe Spec, Abschnitt „Ablösung von GeoSetter“: zuerst die übrigen Nutzer von GeoSetters ExifTool umstellen, dann GeoSetter aus dem PATH entfernen | GeoSetter wird nicht mehr gebraucht |
 
 ## Global Constraints
 

@@ -255,6 +255,22 @@ Diese Punkte gehören nicht zu Version 1. Das Design soll sie aber ohne Umbau zu
   - Der Bezug `T` (geografisch) bzw. `M` (magnetisch) muss dabei beachtet werden.
   - Kompassdaten aus GPX-Tracks sind nicht vorgesehen, weil kaum ein Gerät sie liefert.
 
+## Ablösung von GeoSetter
+
+Dieser Schritt kommt erst, wenn GeoTagger den Workflow vollständig abdeckt, also nach Plan 6, und GeoSetter nicht mehr genutzt wird. Bis dahin bleibt GeoSetter unverändert.
+
+1. **Übrige Nutzer von GeoSetters ExifTool umstellen** auf das per winget installierte ExifTool (`C:\Users\thomas\AppData\Local\Programs\ExifTool\exiftool.exe`, 13.59 oder neuer), am besten über ExifToolHelper. Stand 2026-11-04:
+   - GPXEditor `MakeImageJSON`: fester Pfad `C:\Program Files (x86)\GeoSetter beta\tools`
+   - PicExporter `ConfigParameters`: derselbe Pfad als Vorgabe, wenn die Konfiguration kein `<exiftoolPath>` setzt
+   - PicWorkflow: Arbeitsschritte, die im Text auf GeoSetter verweisen, auf GeoTagger umformulieren
+   - die Windows-cmd-Abläufe der Bildverarbeitung: prüfen, ob sie ExifTool über den PATH oder einen GeoSetter-Pfad aufrufen
+2. **Den PATH-Eintrag `C:\Users\Thomas\AppData\Roaming\GeoSetter_beta\tools` entfernen** (Benutzervariable `Path`). Danach liefert der PATH nur noch die winget-Version. NetBeans und die Terminals neu starten.
+3. **Prüfen:**
+   - `where exiftool` zeigt nur die winget-Version.
+   - Die Tests von ExifToolHelper und GeoTagger sind ohne `EXIFTOOL_PATH` grün.
+   - GPXEditor, PicExporter und PicWorkflow laufen.
+4. GeoSetter deinstallieren. Dabei verschwinden auch `C:\Program Files (x86)\GeoSetter beta` und der AppData-Ordner.
+
 ## Offene Punkte für die Planung
 
 - Geklärt: `-P` erhält unter Windows auch das Erstellungsdatum (ExifTool 12.57). `MetadataWriter` stellt es zur Sicherheit trotzdem selbst wieder her.
