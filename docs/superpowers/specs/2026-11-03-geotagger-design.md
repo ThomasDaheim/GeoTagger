@@ -240,7 +240,9 @@ Aktionen der Werkzeugleiste wirken auf die Auswahl. Ist nichts ausgewählt, wirk
   - nicht verwaltete Tags bleiben erhalten, geprüft an einer Smartphone-Datei mit `GPSImgDirection`, deren Koordinaten, Ort und Höhe geändert werden
 - **Musterdateien:** je eine kleine Datei der echten Kameras (DSLR-RAW, Smartphone-JPEG/HEIC, Videos). Der Nutzer stellt sie bereit, sie liegen unter `src/test/resources`.
 - **Online-Dienste:** in Tests über Mocks der Schnittstellen, dazu ein manueller Smoke-Test.
-- **UI:** manueller Test des Workflows mit einer echten Sammlung.
+- **UI-Tests mit TestFX:** markiert mit `@Tag("UI")`, laufen über `gradlew uiTest` oder die Suite `UITests`. Abgedeckt sind die Abläufe ohne native Dialoge, z. B. Ordner laden, Filter, Bearbeiten, Undo/Redo und Speichern. Sie öffnen echte Fenster, Maus und Tastatur bleiben währenddessen unberührt.
+- **Manuell bleiben:** native Datei- und Ordnerdialoge, Rückfragen per `Alert`, das Aussehen der Vorschau und später die Karte (WebView), dazu ein Durchgang mit einer echten Sammlung.
+- **Testsammlungen:** `gradlew test` bzw. die Suite `NonUITests` laufen ohne UI. Alle Tests nutzen einen eigenen Preferences-Knoten (`tf/geotagger/test`), die echten Einstellungen bleiben unberührt.
 
 ## Mögliche nächste Schritte
 

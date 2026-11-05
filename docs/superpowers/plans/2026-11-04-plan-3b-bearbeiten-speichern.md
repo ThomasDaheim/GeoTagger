@@ -20,7 +20,16 @@ Spec: [2026-11-03-geotagger-design.md](../specs/2026-11-03-geotagger-design.md),
 
 ## Global Constraints
 
-- **Oberflächensprache: Englisch.** **Keine automatisierten UI-Tests:** Die Logik wird mit JUnit getestet, die Oberfläche in Task 6 manuell nach Checkliste.
+- **Oberflächensprache: Englisch.**
+- **Tests:**
+  - Die Logik wird mit JUnit getestet.
+  - Die Abläufe im Fenster prüfen UI-Tests mit TestFX in Task 7 (`@Tag("UI")`, `gradlew uiTest`), aufgebaut wie im Gerüst-Plan [2026-11-05-plan-ui-test-geruest.md](2026-11-05-plan-ui-test-geruest.md).
+  - Manuell nach Checkliste in Task 6 bleibt nur, was ohne native Dialoge nicht geht oder vom Aussehen abhängt.
+- **Test-Zugänge aus dem Gerüst-Plan bleiben erhalten**, auch wenn Task 6 den Controller ersetzt:
+  - `loadFolder(Path, boolean)` ist package-private.
+  - `busy` ist `volatile`, dazu gibt es `boolean isBusy()`.
+  - Die Filter-Buttons haben die ID `"filter-" + filter.name()`.
+  - `GeoTaggerManager.controller()` bleibt.
 - Java 25, Gradle 9.2.1 über den Wrapper. Gearbeitet wird direkt auf `master`, in GeoTagger und ExifToolHelper.
 - **Lizenz-Header:** Jede `.java`-Datei beginnt mit dem BSD-Header aus GPXEditor (25 Zeilen, z. B. von `GeoTagger\src\main\java\tf\geotagger\model\Field.java`). Die Codeblöcke unten lassen ihn weg.
 - **Javadoc:** Ist ein Kommentar vorhanden, dann vollständig (`@param`/`@return`/`@throws`), `<…>` steht in `{@code …}`.
@@ -68,6 +77,7 @@ GeoTagger:
   src\main\resources\GeoTagger.fxml -- replaced: toolbar with Save / Undo / Redo, right side with tabs
   src\test\java\tf\geotagger\edit\FieldTextTest.java, SelectionValueTest.java, ChangeFieldsActionTest.java
   src\test\java\tf\geotagger\metadata\SaveSummaryTest.java
+  src\test\java\tf\geotagger\main\GeoTaggerEditUiTest.java -- UI tests: edit, undo / redo, save
 ```
 
 ---
@@ -410,7 +420,7 @@ public record SelectionValue(Object value, boolean different) {
 - [ ] **Step 4: Tests laufen lassen**
 
 Run: `.\gradlew.bat test`
-Expected: BUILD SUCCESSFUL, 108 Tests grün (101 + 7).
+Expected: BUILD SUCCESSFUL, 109 Tests grün (102 + 7).
 
 - [ ] **Step 5: Commit**
 
@@ -638,7 +648,7 @@ public class ChangeFieldsAction extends AbstractDoUndoAction {
 - [ ] **Step 4: Tests laufen lassen**
 
 Run: `.\gradlew.bat test`
-Expected: BUILD SUCCESSFUL, 112 Tests grün.
+Expected: BUILD SUCCESSFUL, 113 Tests grün.
 
 - [ ] **Step 5: Commit**
 
@@ -768,7 +778,7 @@ public final class SaveSummary {
 - [ ] **Step 4: Tests laufen lassen**
 
 Run: `.\gradlew.bat test`
-Expected: BUILD SUCCESSFUL, 114 Tests grün.
+Expected: BUILD SUCCESSFUL, 115 Tests grün.
 
 - [ ] **Step 5: Commit**
 
@@ -856,6 +866,8 @@ public class DetailsPane extends GridPane {
         int row = 0;
         for (Field field : Field.values()) {
             final TextField text = new TextField();
+            // UI tests find the fields by ID, e.g. #details-CITY
+            text.setId("details-" + field.name());
             text.setOnAction(event -> commit(field));
             text.focusedProperty().addListener((observable, wasFocused, focused) -> {
                 if (!focused) {
@@ -1044,7 +1056,7 @@ public class ImageInfoPane extends BorderPane {
 - [ ] **Step 3: Kompilieren**
 
 Run: `.\gradlew.bat build`
-Expected: BUILD SUCCESSFUL, 114 Tests grün, keine Compilerwarnungen. Die beiden Klassen sind noch nicht eingebunden, das folgt in Task 6.
+Expected: BUILD SUCCESSFUL, 115 Tests grün, keine Compilerwarnungen. Die beiden Klassen sind noch nicht eingebunden, das folgt in Task 6.
 
 - [ ] **Step 4: Commit**
 
@@ -1343,7 +1355,8 @@ public class GeoTagger implements Initializable {
     private Stage stage;
     // folder the files were loaded from - names are shown relative to it
     private Path folder;
-    private boolean busy = false;
+    // volatile: UI tests wait for it from their own thread
+    private volatile boolean busy = false;
     private ExifTool exifTool;
     private MetadataReader reader;
     private MetadataWriter writer;
@@ -1435,6 +1448,8 @@ public class GeoTagger implements Initializable {
     private void initFilters() {
         for (MediaFilter filter : MediaFilter.values()) {
             final ToggleButton button = new ToggleButton(filter.label());
+            // UI tests find the buttons by ID, e.g. #filter-WITHOUT_COORDINATES
+            button.setId("filter-" + filter.name());
             button.setToggleGroup(filterGroup);
             button.setUserData(filter);
             filterButtons.put(filter, button);
@@ -1675,7 +1690,8 @@ public class GeoTagger implements Initializable {
         }
     }
 
-    private void loadFolder(Path newFolder, boolean includeSubfolders) {
+    // UI tests load folders this way instead of through the native folder dialog
+    void loadFolder(Path newFolder, boolean includeSubfolders) {
         final MetadataReader folderReader = reader;
         final Task<List<MediaFile>> task = new Task<>() {
             @Override
@@ -1823,6 +1839,11 @@ public class GeoTagger implements Initializable {
         updateButtons();
     }
 
+    // for UI tests: loading or saving still running
+    boolean isBusy() {
+        return busy;
+    }
+
     private void select(int index) {
         if (index >= 0 && index < mediaTable.getItems().size()) {
             mediaTable.getSelectionModel().clearAndSelect(index);
@@ -1863,36 +1884,27 @@ public class GeoTagger implements Initializable {
 - [ ] **Step 4: Bauen und testen**
 
 Run: `.\gradlew.bat build`
-Expected: BUILD SUCCESSFUL, 114 Tests grün, keine Compilerwarnungen.
+Expected: BUILD SUCCESSFUL, 115 Tests grün, keine Compilerwarnungen.
 
 - [ ] **Step 5: Manuell prüfen**
 
 Mit **Kopien** von Fotos arbeiten, nicht mit den Originalen. Zum Beispiel `src\test\resources\samples` in einen Testordner kopieren. Dann `.\gradlew.bat run` und den Testordner öffnen.
 
-Prüfen:
+Bearbeiten in einer Datei, ungültige Eingaben, Mehrfachauswahl, Undo/Redo über die Buttons und Speichern sind durch `GeoTaggerEditUiTest` (Task 7) abgedeckt. Manuell prüfen:
 1. **Layout:** Rechts oben steht der Platzhalter für die Karte, darunter die Reiter „Details“ und „Image info“. Die Teilungen bleiben nach einem Neustart erhalten.
-2. **Details, eine Datei:**
-   - Die Felder zeigen die Werte der Datei.
-   - City ändern und Enter drücken: In der Liste wird „Loc.“ zu ●, „Save (1)“ wird aktiv, die Spalte „Place“ zeigt den neuen Ort.
-   - Latitude `91` eingeben: Das Feld wird rot, der Tooltip nennt den Grund, nichts wird geändert.
-   - `46,5` wird als `46.5` übernommen.
-3. **Details, mehrere Dateien:**
-   - Mehrere Dateien mit unterschiedlichem Ort auswählen: City ist leer mit „(different)“.
-   - Einen Wert eingeben: Alle ausgewählten Dateien bekommen ihn, „Save (n)“ zählt sie, die Auswahl bleibt erhalten.
-4. **Filter:** Im Filter „Without place“ einer Datei einen Ort geben. Sie verschwindet aus der Liste, die Zahlen der Filter stimmen.
-5. **Undo/Redo:**
-   - „Undo“ bzw. Strg+Z außerhalb eines Textfelds stellt den vorherigen Wert wieder her, „Redo“ bzw. Strg+Y wiederholt ihn.
-   - Nach mehreren Undos ist ● wieder ✓/– und „Save“ inaktiv, wenn alles zurückgenommen ist.
-6. **Image info:**
+2. **Details, Aussehen:**
+   - Das Feld mit `91` wird rot, der Tooltip nennt den Grund.
+   - Bei Mehrfachauswahl mit unterschiedlichem Ort ist City leer mit „(different)“.
+3. **Tastatur:** Strg+Z und Strg+Y außerhalb eines Textfelds wirken wie „Undo“ und „Redo“.
+4. **Image info:**
    - Den Reiter wählen: Die Tags der ausgewählten Datei erscheinen, z. B. `System:FileName`, `XMP-photoshop:City`.
    - Beim Blättern folgen die Tags der Auswahl. Ist der Reiter nicht sichtbar, wird nichts gelesen.
-7. **Speichern:**
-   - „Save (n)“: Fortschritt in der Statusleiste, danach „n saved“. ● wird zu ✓, „Undo“ ist inaktiv, „Image info“ zeigt die geschriebenen Werte.
-   - `*_original` liegt neben den Dateien.
-8. **Von außen geändert:** Eine Datei ändern, z. B. mit `exiftool -XMP-photoshop:City=X datei.jpg`, dann in GeoTagger ein anderes Feld derselben Datei ändern und speichern. Es kommt die Meldung „Not all files were saved“ mit dem Abschnitt „Changed outside GeoTagger …“, und die Datei behält ihr ●.
-9. **Ordnerwechsel mit Änderungen:**
-   - „Open folder...“ oder ein Eintrag aus der Liste fragt „n files have unsaved changes“. „Cancel“ bleibt im Ordner, „Discard“ wechselt ohne Speichern, „Save“ speichert und wechselt danach.
-10. **Schließen mit Änderungen:** Dieselbe Rückfrage. „Save“ speichert und schließt, „Cancel“ lässt das Fenster offen.
+   - Nach dem Speichern zeigt der Reiter die geschriebenen Werte.
+5. **Von außen geändert:** Eine Datei ändern, z. B. mit `exiftool -XMP-photoshop:City=X datei.jpg`, dann in GeoTagger ein anderes Feld derselben Datei ändern und speichern. Es kommt die Meldung „Not all files were saved“ mit dem Abschnitt „Changed outside GeoTagger …“, und die Datei behält ihr ●.
+6. **Ordnerwechsel mit Änderungen:** „Open folder...“ oder ein Eintrag aus der Liste fragt „n files have unsaved changes“. „Cancel“ bleibt im Ordner, „Discard“ wechselt ohne Speichern, „Save“ speichert und wechselt danach.
+7. **Schließen mit Änderungen:** Dieselbe Rückfrage. „Save“ speichert und schließt, „Cancel“ lässt das Fenster offen.
+
+Die Rückfragen in 6 und 7 sind ein `Alert` und bleiben manuell. Ihr Inhalt kommt aus `confirmUnsavedChanges`.
 
 - [ ] **Step 6: Commit**
 
@@ -1903,9 +1915,152 @@ Prüfen:
 
 ---
 
+### Task 7: UI-Tests für Bearbeiten und Speichern
+
+**Files:**
+- Create: `src\test\java\tf\geotagger\main\GeoTaggerEditUiTest.java`
+
+**Interfaces:**
+- Consumes:
+  - aus dem Gerüst-Plan: `UiTestSupport.preparePreferences(Path)`, `UiTestSupport.start(Stage)`, `UiTestSupport.waitUntilIdle(GeoTagger)`, `GeoTaggerManager.controller()`, `GeoTagger.loadFolder(Path, boolean)`, `ExifToolTestSupport.require()`, `TestFiles.image(Path, String)`
+  - aus Task 5: die IDs `#details-<FIELD>`
+  - aus Task 6: `#saveButton`, `#undoButton`, `#redoButton`, die Spalte `placeStatusColumn`, `isBusy()` auch beim Speichern
+- Produces: 5 UI-Tests, zusammen mit `GeoTaggerUiTest` 8
+
+Aufbau wie `GeoTaggerUiTest`: `@Tag("UI")`, `@ExtendWith(ApplicationExtension.class)`, `@BeforeAll` mit `ExifToolTestSupport.require()`, `@Start` und `@Stop` gleich. Regeln aus dem Gerüst-Plan: ein Test pro Ablauf, Suche über IDs, auf Zustände warten statt `sleep`, Daten in `@TempDir`, keine nativen Dialoge.
+
+- [ ] **Step 1: Hilfsmethoden**
+
+```java
+// a.jpg with city "Meran", b.jpg without - both selected files in the tests are copies in @TempDir
+private void loadTwoImages(FxRobot robot) throws TimeoutException {
+    final Path withCity = TestFiles.image(dir, "a.jpg");
+    TestFiles.image(dir, "b.jpg");
+    try (ExifTool tool = new ExifTool(exifTool)) {
+        tool.execute(List.of("-overwrite_original", "-XMP-photoshop:City=Meran", withCity.toString()));
+    }
+    robot.interact(() -> controller.loadFolder(dir, false));
+    UiTestSupport.waitUntilIdle(controller);
+}
+
+private TableView<MediaFile> table(FxRobot robot) {
+    return robot.lookup("#mediaTable").queryTableView();
+}
+
+// selects the file in the list - the details show it afterwards
+private MediaFile select(FxRobot robot, String name) {
+    final MediaFile file = fileNamed(table(robot), name);
+    robot.interact(() -> table(robot).getSelectionModel().clearAndSelect(table(robot).getItems().indexOf(file)));
+    return file;
+}
+
+// replaces the text of a details field and presses Enter, like a user
+private void enter(FxRobot robot, Field field, String text) {
+    final TextField input = robot.lookup("#details-" + field.name()).queryAs(TextField.class);
+    robot.clickOn(input);
+    robot.interact(input::selectAll);
+    robot.write(text).type(KeyCode.ENTER);
+    WaitForAsyncUtils.waitForFxEvents();
+}
+```
+
+`fileNamed` wie in `GeoTaggerUiTest`, `placeStatus(table, file)` liefert `getCellData` der Spalte mit der ID `placeStatusColumn`.
+
+- [ ] **Step 2: Die Tests**
+
+```java
+@Test
+void editingCityMarksTheFileAsChanged(FxRobot robot) throws TimeoutException {
+    loadTwoImages(robot);
+    final MediaFile file = select(robot, "a.jpg");
+
+    enter(robot, Field.CITY, "Bozen");
+
+    assertEquals("Bozen", file.value(Field.CITY));
+    assertEquals("●", placeStatus(table(robot), file));
+    assertEquals("Save (1)", robot.lookup("#saveButton").queryButton().getText());
+}
+
+@Test
+void invalidLatitudeIsRejected(FxRobot robot) throws TimeoutException {
+    loadTwoImages(robot);
+    final MediaFile file = select(robot, "b.jpg");
+
+    enter(robot, Field.LATITUDE, "91");
+
+    final TextField latitude = robot.lookup("#details-LATITUDE").queryAs(TextField.class);
+    assertTrue(latitude.getStyle().contains("red"));
+    assertFalse(file.isChanged());
+}
+
+@Test
+void undoAndRedo(FxRobot robot) throws TimeoutException {
+    loadTwoImages(robot);
+    final MediaFile file = select(robot, "a.jpg");
+    enter(robot, Field.CITY, "Bozen");
+
+    robot.clickOn("#undoButton");
+    assertEquals("Meran", file.value(Field.CITY));
+    assertFalse(file.isChanged());
+
+    robot.clickOn("#redoButton");
+    assertEquals("Bozen", file.value(Field.CITY));
+    assertTrue(file.isChanged());
+}
+
+@Test
+void multiSelectionChangesAllFiles(FxRobot robot) throws TimeoutException {
+    loadTwoImages(robot);
+    robot.interact(() -> table(robot).getSelectionModel().selectAll());
+
+    enter(robot, Field.CITY, "Bozen");
+
+    table(robot).getItems().forEach(file -> assertEquals("Bozen", file.value(Field.CITY)));
+    assertEquals("Save (2)", robot.lookup("#saveButton").queryButton().getText());
+}
+
+@Test
+void saveWritesTheFile(FxRobot robot) throws TimeoutException {
+    loadTwoImages(robot);
+    final MediaFile file = select(robot, "a.jpg");
+    enter(robot, Field.CITY, "Bozen");
+
+    robot.clickOn("#saveButton");
+    UiTestSupport.waitUntilIdle(controller);
+
+    try (ExifTool tool = new ExifTool(exifTool)) {
+        final Map<String, Object> tags = tool.readJson(List.of(file.path()), List.of("XMP-photoshop:City")).get(0);
+        assertEquals("Bozen", tags.get("XMP-photoshop:City"));
+    }
+    assertTrue(Files.exists(dir.resolve("a.jpg_original")));
+    assertEquals("✓", placeStatus(table(robot), file));
+}
+```
+
+- [ ] **Step 3: UI-Tests laufen lassen**
+
+Run: `.\gradlew.bat uiTest`
+Expected: BUILD SUCCESSFUL, 8 Tests grün (3 aus `GeoTaggerUiTest`, 5 aus `GeoTaggerEditUiTest`). Während des Laufs Maus und Tastatur nicht anfassen.
+
+Schlägt ein Test fehl, ist zuerst der Ablauf im Programm zu prüfen, nicht der Test. Weicht nur die Bedienung im Test ab (z. B. Fokus), wird das als Ruling festgehalten.
+
+- [ ] **Step 4: Ohne UI weiterhin unverändert**
+
+Run: `.\gradlew.bat test`
+Expected: BUILD SUCCESSFUL, 115 Tests grün, keine Fenster.
+
+- [ ] **Step 5: Commit**
+
+```powershell
+& $git -C $app add src/test
+& $git -C $app commit -m "UI tests: edit, undo / redo, multi-selection, save"
+```
+
+---
+
 ## Abschluss von Plan 3b
 
 - **ExifToolHelper:** 12 Tests grün.
-- **GeoTagger:** 114 Tests grün, keine Compilerwarnungen. Die Javadoc-Prüfung mit dem Doclint-Init-Skript findet nichts.
+- **GeoTagger:** `gradlew test` 115 Tests grün, `gradlew uiTest` 8 UI-Tests grün, keine Compilerwarnungen. Die Javadoc-Prüfung mit dem Doclint-Init-Skript findet nichts.
 - Die Checkliste aus Task 6 ist abgehakt.
 - Danach Plan 4 (Karte in GeoHelper und Einbindung) auf Basis des entstandenen Codes schreiben.
