@@ -420,7 +420,7 @@ public record SelectionValue(Object value, boolean different) {
 - [ ] **Step 4: Tests laufen lassen**
 
 Run: `.\gradlew.bat test`
-Expected: BUILD SUCCESSFUL, 109 Tests grün (102 + 7).
+Expected: BUILD SUCCESSFUL, 110 Tests grün (103 + 7).
 
 - [ ] **Step 5: Commit**
 
@@ -648,7 +648,7 @@ public class ChangeFieldsAction extends AbstractDoUndoAction {
 - [ ] **Step 4: Tests laufen lassen**
 
 Run: `.\gradlew.bat test`
-Expected: BUILD SUCCESSFUL, 113 Tests grün.
+Expected: BUILD SUCCESSFUL, 114 Tests grün.
 
 - [ ] **Step 5: Commit**
 
@@ -778,7 +778,7 @@ public final class SaveSummary {
 - [ ] **Step 4: Tests laufen lassen**
 
 Run: `.\gradlew.bat test`
-Expected: BUILD SUCCESSFUL, 115 Tests grün.
+Expected: BUILD SUCCESSFUL, 116 Tests grün.
 
 - [ ] **Step 5: Commit**
 
@@ -1056,7 +1056,7 @@ public class ImageInfoPane extends BorderPane {
 - [ ] **Step 3: Kompilieren**
 
 Run: `.\gradlew.bat build`
-Expected: BUILD SUCCESSFUL, 115 Tests grün, keine Compilerwarnungen. Die beiden Klassen sind noch nicht eingebunden, das folgt in Task 6.
+Expected: BUILD SUCCESSFUL, 116 Tests grün, keine Compilerwarnungen. Die beiden Klassen sind noch nicht eingebunden, das folgt in Task 6.
 
 - [ ] **Step 4: Commit**
 
@@ -1884,7 +1884,7 @@ public class GeoTagger implements Initializable {
 - [ ] **Step 4: Bauen und testen**
 
 Run: `.\gradlew.bat build`
-Expected: BUILD SUCCESSFUL, 115 Tests grün, keine Compilerwarnungen.
+Expected: BUILD SUCCESSFUL, 116 Tests grün, keine Compilerwarnungen.
 
 - [ ] **Step 5: Manuell prüfen**
 
@@ -2047,7 +2047,7 @@ Schlägt ein Test fehl, ist zuerst der Ablauf im Programm zu prüfen, nicht der 
 - [ ] **Step 4: Ohne UI weiterhin unverändert**
 
 Run: `.\gradlew.bat test`
-Expected: BUILD SUCCESSFUL, 115 Tests grün, keine Fenster.
+Expected: BUILD SUCCESSFUL, 116 Tests grün, keine Fenster.
 
 - [ ] **Step 5: Commit**
 
@@ -2061,6 +2061,6 @@ Expected: BUILD SUCCESSFUL, 115 Tests grün, keine Fenster.
 ## Abschluss von Plan 3b
 
 - **ExifToolHelper:** 12 Tests grün.
-- **GeoTagger:** `gradlew test` 115 Tests grün, `gradlew uiTest` 8 UI-Tests grün, keine Compilerwarnungen. Die Javadoc-Prüfung mit dem Doclint-Init-Skript findet nichts.
+- **GeoTagger:** `gradlew test` 116 Tests grün, `gradlew uiTest` 8 UI-Tests grün, keine Compilerwarnungen. Die Javadoc-Prüfung mit dem Doclint-Init-Skript findet nichts.
 - Die Checkliste aus Task 6 ist abgehakt.
 - Danach Plan 4 (Karte in GeoHelper und Einbindung) auf Basis des entstandenen Codes schreiben.

@@ -30,12 +30,16 @@ import java.nio.file.Path;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import javafx.stage.Stage;
+import org.junit.jupiter.api.Assumptions;
 import org.testfx.util.WaitForAsyncUtils;
 
 /**
  * Helpers for the UI tests of GeoTagger - see docs/superpowers/plans/2026-11-05-plan-ui-test-geruest.md.
  */
 final class UiTestSupport {
+    // preferences node of the tests - set by the Gradle test tasks in build.gradle
+    private static final String TEST_NODE = "tf/geotagger/test";
+
     private UiTestSupport() {
     }
 
@@ -43,8 +47,12 @@ final class UiTestSupport {
      * Fresh preferences for each test - in the test node set by the Gradle test tasks, never the real one.
      *
      * @param exifTool ExifTool executable GeoTagger shall use
+     * @throws org.opentest4j.TestAbortedException if the test node isn't set - the test is skipped then
      */
     static void preparePreferences(Path exifTool) {
+        // started without the Gradle test tasks (e.g. another IDE runner) clear() would wipe the real settings
+        Assumptions.assumeTrue(TEST_NODE.equals(System.getProperty("geotagger.preferences")),
+                "UI tests need -Dgeotagger.preferences=" + TEST_NODE + " - run them via Gradle");
         GeoTaggerPreferences.INSTANCE.clear();
         GeoTaggerPreferences.EXIFTOOL_PATH.put(exifTool.toString());
     }
