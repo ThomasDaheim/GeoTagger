@@ -49,9 +49,9 @@
                             <TableColumn fx:id="nameColumn" text="Name" prefWidth="260"/>
                             <TableColumn fx:id="captureTimeColumn" text="Capture time" prefWidth="150"/>
                             <TableColumn fx:id="placeColumn" text="Place" prefWidth="140"/>
-                            <TableColumn fx:id="coordinatesStatusColumn" text="GPS" prefWidth="45"/>
-                            <TableColumn fx:id="placeStatusColumn" text="Loc." prefWidth="45"/>
-                            <TableColumn fx:id="altitudeStatusColumn" text="Alt." prefWidth="45"/>
+                            <TableColumn fx:id="coordinatesStatusColumn" text="GPS" prefWidth="60" minWidth="60"/>
+                            <TableColumn fx:id="placeStatusColumn" text="Loc." prefWidth="60" minWidth="60"/>
+                            <TableColumn fx:id="altitudeStatusColumn" text="Alt." prefWidth="60" minWidth="60"/>
                         </columns>
                         <placeholder>
                             <Label text="Open a folder to see its photos and videos"/>

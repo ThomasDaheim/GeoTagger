@@ -36,6 +36,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
+import javafx.scene.control.Tooltip;
 import javafx.scene.image.ImageView;
 import javafx.scene.input.KeyCode;
 import javafx.stage.Stage;
@@ -133,6 +134,87 @@ class GeoTaggerEditUiTest {
         robot.interact(input::selectAll);
         robot.write(text).type(KeyCode.ENTER);
         WaitForAsyncUtils.waitForFxEvents();
+    }
+
+    // replaces the text of a details field and leaves it with Tab, like a user
+    private static void enterAndTab(FxRobot robot, Field field, String text) {
+        final TextField input = robot.lookup("#details-" + field.name()).queryAs(TextField.class);
+        robot.clickOn(input);
+        robot.interact(input::selectAll);
+        robot.write(text).type(KeyCode.TAB);
+        WaitForAsyncUtils.waitForFxEvents();
+    }
+
+    private static TextField detailsField(FxRobot robot, Field field) {
+        return robot.lookup("#details-" + field.name()).queryAs(TextField.class);
+    }
+
+    @Test
+    void invalidInputIsShownRightAwayAtTheLeft(FxRobot robot) throws TimeoutException {
+        loadTwoImages(robot);
+        select(robot, "b.jpg");
+
+        enter(robot, Field.LATITUDE, "91");
+
+        final TextField latitude = detailsField(robot, Field.LATITUDE);
+        final Tooltip error = latitude.getTooltip();
+        assertTrue(error != null && error.isShowing());
+        final double fieldLeft = latitude.localToScreen(latitude.getBoundsInLocal()).getMinX();
+        assertEquals(fieldLeft, error.getAnchorX(), 2.0);
+    }
+
+    @Test
+    void invalidInputStaysWhenAnotherFieldIsEdited(FxRobot robot) throws TimeoutException {
+        loadTwoImages(robot);
+        final MediaFile file = select(robot, "b.jpg");
+
+        enterAndTab(robot, Field.LATITUDE, "100");
+        enterAndTab(robot, Field.LONGITUDE, "100");
+
+        assertEquals(100.0, file.value(Field.LONGITUDE));
+        final TextField latitude = detailsField(robot, Field.LATITUDE);
+        assertEquals("100", latitude.getText());
+        assertTrue(latitude.getStyle().contains("red"));
+    }
+
+    @Test
+    void undoAndRedoWithKeysOutsideTextFields(FxRobot robot) throws TimeoutException {
+        loadTwoImages(robot);
+        final MediaFile file = select(robot, "a.jpg");
+        enter(robot, Field.CITY, "Bozen");
+        robot.clickOn(robot.lookup(".table-row-cell").nth(0).queryAs(javafx.scene.Node.class));
+        select(robot, "a.jpg");
+
+        robot.push(KeyCode.CONTROL, KeyCode.Z);
+        assertEquals("Meran", file.value(Field.CITY));
+
+        robot.push(KeyCode.CONTROL, KeyCode.Y);
+        assertEquals("Bozen", file.value(Field.CITY));
+    }
+
+    @Test
+    void ctrlSSaves(FxRobot robot) throws TimeoutException {
+        loadTwoImages(robot);
+        final MediaFile file = select(robot, "a.jpg");
+        enter(robot, Field.CITY, "Bozen");
+
+        robot.push(KeyCode.CONTROL, KeyCode.S);
+        UiTestSupport.waitUntilIdle(controller);
+
+        assertTrue(Files.exists(dir.resolve("a.jpg_original")));
+        assertFalse(file.isChanged());
+    }
+
+    @Test
+    void fieldsAreOnlyAsWideAsNeeded(FxRobot robot) throws TimeoutException {
+        loadTwoImages(robot);
+        select(robot, "a.jpg");
+
+        final double countryCode = detailsField(robot, Field.COUNTRY_CODE).getWidth();
+        final double latitude = detailsField(robot, Field.LATITUDE).getWidth();
+        final double city = detailsField(robot, Field.CITY).getWidth();
+        assertTrue(countryCode < latitude, countryCode + " < " + latitude);
+        assertTrue(latitude < city, latitude + " < " + city);
     }
 
     @Test

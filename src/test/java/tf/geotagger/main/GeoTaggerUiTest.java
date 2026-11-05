@@ -33,6 +33,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.ToggleButton;
+import javafx.scene.text.Text;
 import javafx.stage.Stage;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
@@ -110,6 +111,17 @@ class GeoTaggerUiTest {
         assertEquals("All (0)", robot.lookup("#filter-ALL").queryAs(ToggleButton.class).getText());
         assertFalse(robot.lookup("#openFolderButton").query().isDisabled());
         assertTrue(robot.lookup("#mediaTable").queryTableView().getItems().isEmpty());
+    }
+
+    @Test
+    void statusColumnsShowTheirHeaders(FxRobot robot) {
+        final String[][] headers = {{"coordinatesStatusColumn", "GPS"}, {"placeStatusColumn", "Loc."},
+            {"altitudeStatusColumn", "Alt."}};
+        for (String[] header : headers) {
+            // the text actually drawn - a column too narrow shows "..." or nothing
+            final Text shown = robot.lookup("#" + header[0] + " .label .text").queryAs(Text.class);
+            assertEquals(header[1], shown.getText());
+        }
     }
 
     @Test

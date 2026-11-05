@@ -66,9 +66,31 @@ class FieldTextTest {
     void rejectsInvalidInputWithMessage() {
         assertEquals("Latitude must be between -90 and 90",
                 assertThrows(IllegalArgumentException.class, () -> FieldText.parse(Field.LATITUDE, "91")).getMessage());
-        assertEquals("Longitude must be a number",
+        assertEquals("Longitude must be decimal degrees like 11.5 or degrees like 11° 30' 0\" E",
                 assertThrows(IllegalArgumentException.class, () -> FieldText.parse(Field.LONGITUDE, "elf")).getMessage());
         assertThrows(IllegalArgumentException.class, () -> FieldText.parse(Field.ALTITUDE, "NaN"));
         assertThrows(IllegalArgumentException.class, () -> FieldText.parse(Field.TIME_OFFSET, "Europe/Rome"));
+    }
+
+    @Test
+    void parsesDegreesWithHemisphere() {
+        assertEquals(48.1372, (Double) FieldText.parse(Field.LATITUDE, "48.1372° N"), 1e-9);
+        assertEquals(48 + 8 / 60.0 + 14 / 3600.0, (Double) FieldText.parse(Field.LATITUDE, "48° 08′ 14″ N"), 1e-9);
+        assertEquals(48 + 8 / 60.0 + 14 / 3600.0, (Double) FieldText.parse(Field.LATITUDE, "N 48°8'14\""), 1e-9);
+        assertEquals(-(33 + 52.5 / 60.0), (Double) FieldText.parse(Field.LATITUDE, "33° 52,5' s"), 1e-9);
+        assertEquals(-(11 + 20 / 60.0 + 30.5 / 3600.0), (Double) FieldText.parse(Field.LONGITUDE, "11°20'30.5\"W"), 1e-9);
+        assertEquals(11.5, (Double) FieldText.parse(Field.LONGITUDE, "E 11.5"), 1e-9);
+        assertEquals(48.5, (Double) FieldText.parse(Field.LATITUDE, "48,5°"), 1e-9);
+        assertEquals(-48.5, (Double) FieldText.parse(Field.LATITUDE, "-48.5°"), 1e-9);
+    }
+
+    @Test
+    void rejectsInvalidDegrees() {
+        // minutes / seconds beyond 59, both signs, wrong hemisphere for the field, decimals before minutes
+        for (String text : new String[] {"48° 60' N", "48° 8' 60\" N", "-48° N", "N 48 S", "48° E", "48.5° 8' N", "91° N"}) {
+            assertThrows(IllegalArgumentException.class, () -> FieldText.parse(Field.LATITUDE, text), text);
+        }
+        assertThrows(IllegalArgumentException.class, () -> FieldText.parse(Field.LONGITUDE, "11° N"));
+        assertThrows(IllegalArgumentException.class, () -> FieldText.parse(Field.LONGITUDE, "181° E"));
     }
 }

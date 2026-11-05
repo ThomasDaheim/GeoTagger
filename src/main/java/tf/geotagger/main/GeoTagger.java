@@ -43,6 +43,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Predicate;
 import javafx.beans.property.ReadOnlyStringWrapper;
+import javafx.beans.value.ChangeListener;
 import javafx.collections.FXCollections;
 import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
@@ -68,6 +69,9 @@ import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.control.ToggleGroup;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyCodeCombination;
+import javafx.scene.input.KeyCombination;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.HBox;
 import javafx.stage.DirectoryChooser;
@@ -171,6 +175,8 @@ public class GeoTagger implements Initializable {
     private volatile boolean busy = false;
     // true while refreshFiles() restores the selection - the selection listeners ignore that
     private boolean restoringSelection = false;
+    // DoUndoManager is a singleton - its listener is removed in stop(), otherwise it keeps this window alive
+    private final ChangeListener<Number> undoListener = (observable, oldValue, newValue) -> updateButtons();
     private ExifTool exifTool;
     private MetadataReader reader;
     private MetadataWriter writer;
@@ -183,7 +189,7 @@ public class GeoTagger implements Initializable {
         initPreview();
         initDetails();
         updateRecentFolders();
-        DoUndoManager.getInstance().changeCountProperty().addListener((observable, oldValue, newValue) -> updateButtons());
+        DoUndoManager.getInstance().changeCountProperty().addListener(undoListener);
     }
 
     /**
@@ -212,6 +218,17 @@ public class GeoTagger implements Initializable {
                 redo();
             }
         });
+        // shortcuts work everywhere in the window, also while typing in a field
+        stage.getScene().getAccelerators().put(UsefulKeyCodes.CNTRL_S.getKeyCodeCombination(), () -> {
+            if (!busy && writer != null) {
+                save();
+            }
+        });
+        stage.getScene().getAccelerators().put(new KeyCodeCombination(KeyCode.O, KeyCombination.SHORTCUT_DOWN), () -> {
+            if (!openFolderButton.isDisabled()) {
+                openFolder();
+            }
+        });
         stage.setOnCloseRequest(event -> {
             if (busy) {
                 // loading or saving - closing now could lose changes
@@ -233,6 +250,7 @@ public class GeoTagger implements Initializable {
         GeoTaggerPreferences.RECENT_RIGHT_DIVIDER_POS.put(rightSplit.getDividerPositions()[0]);
         GeoTaggerPreferences.INCLUDE_SUBFOLDERS.put(includeSubfoldersCheck.isSelected());
         TableViewPreferences.saveTableViewPreferences(mediaTable, TABLE_PREFERENCES, GeoTaggerPreferences.INSTANCE);
+        DoUndoManager.getInstance().changeCountProperty().removeListener(undoListener);
         worker.shutdownNow();
         previewPane.dispose();
         imageInfoPane.dispose();
@@ -566,6 +584,8 @@ public class GeoTagger implements Initializable {
 
     @FXML
     private void save() {
+        // ctrl+s while typing: what is in the field counts as well
+        detailsPane.commitAll();
         saveChanges(null);
     }
 

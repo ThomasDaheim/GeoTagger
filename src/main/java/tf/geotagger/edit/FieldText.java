@@ -29,12 +29,33 @@ import java.math.BigDecimal;
 import java.time.DateTimeException;
 import java.time.ZoneOffset;
 import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import tf.geotagger.model.Field;
 
 /**
  * Text of the field values in the details: formatting for display and checking / parsing the user's input.
  */
 public final class FieldText {
+    // the input formats follow LatLonHelper of GPXEditor, extended by decimal degrees with hemisphere ("48.1372° N")
+    private static final String NUMBER = "(\\d+(?:[.,]\\d+)?)";
+    private static final String DEGREE_SIGN = "\\s*[°º]";
+    private static final String MINUTE_SIGN = "\\s*['′]";
+    private static final String SECOND_SIGN = "\\s*(?:[\"″]|'')";
+    // 48.1372 / 48.1372°
+    private static final Pattern DEGREES = Pattern.compile(NUMBER + "(?:" + DEGREE_SIGN + ")?");
+    // 48° 8.25'
+    private static final Pattern DEGREES_MINUTES = Pattern.compile("(\\d+)" + DEGREE_SIGN + "\\s*" + NUMBER + MINUTE_SIGN);
+    // 48° 8' 14.5"
+    private static final Pattern DEGREES_MINUTES_SECONDS = Pattern.compile(
+            "(\\d+)" + DEGREE_SIGN + "\\s*(\\d+)" + MINUTE_SIGN + "\\s*" + NUMBER + SECOND_SIGN);
+
+    private record DegreeFormat(String name, double limit, char positive, char negative, String decimalExample,
+            String degreeExample) {
+    }
+    private static final DegreeFormat LATITUDE_FORMAT = new DegreeFormat("Latitude", 90, 'N', 'S', "46.5", "46° 30' 0\" N");
+    private static final DegreeFormat LONGITUDE_FORMAT = new DegreeFormat("Longitude", 180, 'E', 'W', "11.5", "11° 30' 0\" E");
+
     private FieldText() {
     }
 
@@ -69,8 +90,8 @@ public final class FieldText {
             return null;
         }
         return switch (field) {
-            case LATITUDE -> number(trimmed, "Latitude", 90);
-            case LONGITUDE -> number(trimmed, "Longitude", 180);
+            case LATITUDE -> degrees(trimmed, LATITUDE_FORMAT);
+            case LONGITUDE -> degrees(trimmed, LONGITUDE_FORMAT);
             case ALTITUDE -> number(trimmed, "Altitude", Double.POSITIVE_INFINITY);
             case COUNTRY_CODE -> trimmed.toUpperCase(Locale.ROOT);
             case TIME_OFFSET -> offset(trimmed);
@@ -91,6 +112,78 @@ public final class FieldText {
         }
         if (Math.abs(value) > limit) {
             throw new IllegalArgumentException(name + " must be between -" + (int) limit + " and " + (int) limit);
+        }
+        return value;
+    }
+
+    // decimal degrees with sign or hemisphere, or degrees / minutes / seconds - the hemisphere may come first or last
+    private static Double degrees(String text, DegreeFormat format) {
+        final IllegalArgumentException invalid = new IllegalArgumentException(format.name() + " must be decimal degrees like "
+                + format.decimalExample() + " or degrees like " + format.degreeExample());
+        String rest = text;
+        int sign = 1;
+        boolean hemisphere = false;
+        final char first = Character.toUpperCase(rest.charAt(0));
+        final char last = Character.toUpperCase(rest.charAt(rest.length() - 1));
+        if (Character.isLetter(first)) {
+            sign = hemisphereSign(first, format, invalid);
+            hemisphere = true;
+            rest = rest.substring(1).trim();
+        } else if (Character.isLetter(last)) {
+            sign = hemisphereSign(last, format, invalid);
+            hemisphere = true;
+            rest = rest.substring(0, rest.length() - 1).trim();
+        }
+        if (rest.startsWith("-") || rest.startsWith("+")) {
+            if (hemisphere) {
+                // "-48° N" - which one is meant?
+                throw invalid;
+            }
+            sign = rest.startsWith("-") ? -1 : 1;
+            rest = rest.substring(1).trim();
+        }
+        final double value = sign * unsignedDegrees(rest, invalid);
+        if (Math.abs(value) > format.limit()) {
+            throw new IllegalArgumentException(format.name() + " must be between -" + (int) format.limit() + " and "
+                    + (int) format.limit());
+        }
+        return value;
+    }
+
+    private static int hemisphereSign(char letter, DegreeFormat format, IllegalArgumentException invalid) {
+        if (letter == format.positive()) {
+            return 1;
+        }
+        if (letter == format.negative()) {
+            return -1;
+        }
+        throw invalid;
+    }
+
+    private static double unsignedDegrees(String text, IllegalArgumentException invalid) {
+        Matcher matcher = DEGREES.matcher(text);
+        if (matcher.matches()) {
+            return decimal(matcher.group(1));
+        }
+        matcher = DEGREES_MINUTES.matcher(text);
+        if (matcher.matches()) {
+            return Integer.parseInt(matcher.group(1)) + belowSixty(decimal(matcher.group(2)), invalid) / 60.0;
+        }
+        matcher = DEGREES_MINUTES_SECONDS.matcher(text);
+        if (matcher.matches()) {
+            return Integer.parseInt(matcher.group(1)) + belowSixty(Integer.parseInt(matcher.group(2)), invalid) / 60.0
+                    + belowSixty(decimal(matcher.group(3)), invalid) / 3600.0;
+        }
+        throw invalid;
+    }
+
+    private static double decimal(String text) {
+        return Double.parseDouble(text.replace(',', '.'));
+    }
+
+    private static double belowSixty(double value, IllegalArgumentException invalid) {
+        if (value >= 60) {
+            throw invalid;
         }
         return value;
     }
