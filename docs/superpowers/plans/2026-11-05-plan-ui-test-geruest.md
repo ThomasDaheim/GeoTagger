@@ -309,9 +309,7 @@ Tests:
     }
 ```
 
-Zwei Stellen lassen sich nicht direkt mit `lookup` lösen und werden so umgesetzt:
-- **Fenstertitel:** `UiTestSupport.start` merkt sich die Stage. Der Test prüft `stage.getTitle()` auf `"GeoTagger"`. Dafür wird die Stage aus `@Start` in einem Feld gehalten.
-- **Statusspalte:** Spalten sind keine Nodes, `lookup("#coordinatesStatusColumn")` findet sie also nicht. Stattdessen holt `table.getColumns()` die Spalte mit `getId().equals("coordinatesStatusColumn")`, und `column.getCellData(withGps)` muss `"\u2713"` liefern. Für eine Datei ohne GPS muss `"\u2013"` kommen.
+Dazu kommt die private Hilfsmethode `fileNamed(TableView<MediaFile> table, String name)`. Sie liefert die Zeile, deren `path().getFileName()` gleich `name` ist.
 
 - [ ] **Step 2: UI-Tests laufen lassen**
 
