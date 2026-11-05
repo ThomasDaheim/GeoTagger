@@ -70,7 +70,10 @@ import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.control.ToggleGroup;
+import javafx.scene.input.ClipboardContent;
+import javafx.scene.input.Dragboard;
 import javafx.scene.input.KeyCode;
+import javafx.scene.input.TransferMode;
 import javafx.scene.input.KeyCodeCombination;
 import javafx.scene.input.KeyCombination;
 import javafx.scene.input.KeyEvent;
@@ -375,6 +378,19 @@ public class GeoTagger implements Initializable {
             mediaTable.scrollTo(index);
         });
         mapPane.setOnFileMoved((file, position) -> setPosition(List.of(file), position, "Set position"));
+        mapPane.setSelectionSupplier(this::selectedFiles);
+        mapPane.setOnSetPosition((selected, position) -> setPosition(selected, position, "Set position"));
+        // drag the selected files onto the map
+        mediaTable.setOnDragDetected(event -> {
+            final List<MediaFile> selected = selectedFiles();
+            if (!selected.isEmpty()) {
+                final Dragboard dragboard = mediaTable.startDragAndDrop(TransferMode.LINK);
+                final ClipboardContent content = new ClipboardContent();
+                content.put(MapPane.SELECTION_FORMAT, selected.size());
+                dragboard.setContent(content);
+                event.consume();
+            }
+        });
     }
 
     /**

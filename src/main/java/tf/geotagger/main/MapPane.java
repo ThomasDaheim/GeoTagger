@@ -31,9 +31,17 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.BiConsumer;
+import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import javafx.scene.control.ContextMenu;
+import javafx.scene.control.MenuItem;
+import javafx.scene.input.DataFormat;
+import javafx.scene.input.MouseButton;
+import javafx.scene.input.MouseEvent;
+import javafx.scene.input.TransferMode;
 import javafx.scene.layout.StackPane;
+import javafx.scene.web.WebView;
 import tf.geo.LatLon;
 import tf.geo.map.LeafletMapView;
 import tf.geo.map.MapConfig;
@@ -44,16 +52,29 @@ import tf.geotagger.model.MediaFile;
  * The map of the main window: markers for the files, selection, moving markers - see spec, "Leaflet-Karte".
  */
 public class MapPane extends StackPane {
+    /**
+     * Content of a drag from the file list - the dragged files are the selection.
+     */
+    static final DataFormat SELECTION_FORMAT = new DataFormat("application/x-geotagger-selection");
+
     private static final Logger LOGGER = Logger.getLogger(MapPane.class.getName());
 
     private final LeafletMapView mapView = new LeafletMapView();
     // files of the markers shown last - the map reports marker ids
     private final Map<String, MediaFile> filesById = new HashMap<>();
+    private final ContextMenu contextMenu = new ContextMenu();
+    private final MenuItem setPositionHere = new MenuItem();
+    // position of the right click that opened the context menu
+    private LatLon contextPosition;
     private BiConsumer<MediaFile, Boolean> onFileClicked = (file, shiftDown) -> { };
     private BiConsumer<MediaFile, LatLon> onFileMoved = (file, position) -> { };
+    private Supplier<List<MediaFile>> selection = List::of;
+    private BiConsumer<List<MediaFile>, LatLon> onSetPosition = (files, position) -> { };
 
     public MapPane() {
         getChildren().add(mapView);
+        initContextMenu();
+        initDrop();
         mapView.setMapListener(new MapListener() {
             @Override
             public void markerClicked(String id, boolean shiftDown) {
@@ -74,6 +95,55 @@ public class MapPane extends StackPane {
         mapView.displayMap(MapConfig.defaults()).exceptionally(ex -> {
             LOGGER.log(Level.SEVERE, "Map can't be shown", ex);
             return null;
+        });
+    }
+
+    // right click: "Set position of n files here" for the selection - the WebView's own menu is switched off
+    private void initContextMenu() {
+        setPositionHere.setId("setPositionHere");
+        setPositionHere.setOnAction(event -> {
+            final List<MediaFile> files = selection.get();
+            if (contextPosition != null && !files.isEmpty()) {
+                onSetPosition.accept(files, contextPosition);
+            }
+        });
+        contextMenu.getItems().add(setPositionHere);
+        final WebView webView = mapView.getWebView();
+        webView.addEventFilter(MouseEvent.MOUSE_PRESSED, event -> {
+            if (event.getButton() == MouseButton.SECONDARY) {
+                contextPosition = mapView.latLonAt(event.getX(), event.getY()).orElse(null);
+                final int count = selection.get().size();
+                setPositionHere.setText("Set position of " + count + (count == 1 ? " file" : " files") + " here");
+                setPositionHere.setDisable(count == 0 || contextPosition == null);
+                contextMenu.show(webView, event.getScreenX(), event.getScreenY());
+                event.consume();
+            } else {
+                contextMenu.hide();
+            }
+        });
+    }
+
+    // files dragged from the list get the position where they are dropped
+    private void initDrop() {
+        final WebView webView = mapView.getWebView();
+        webView.setOnDragOver(event -> {
+            if (event.getDragboard().hasContent(SELECTION_FORMAT)) {
+                event.acceptTransferModes(TransferMode.LINK);
+                event.consume();
+            }
+        });
+        webView.setOnDragDropped(event -> {
+            boolean done = false;
+            if (event.getDragboard().hasContent(SELECTION_FORMAT)) {
+                final List<MediaFile> files = selection.get();
+                final LatLon position = mapView.latLonAt(event.getX(), event.getY()).orElse(null);
+                if (position != null && !files.isEmpty()) {
+                    onSetPosition.accept(files, position);
+                    done = true;
+                }
+            }
+            event.setDropCompleted(done);
+            event.consume();
         });
     }
 
@@ -124,7 +194,21 @@ public class MapPane extends StackPane {
         onFileMoved = Objects.requireNonNull(handler);
     }
 
-    // for the context menu, drag & drop, the track list and the UI tests
+    /**
+     * @param selection supplies the selected files - the context menu and drag &amp; drop set their position
+     */
+    void setSelectionSupplier(Supplier<List<MediaFile>> selection) {
+        this.selection = Objects.requireNonNull(selection);
+    }
+
+    /**
+     * @param handler called with the files and the position from the context menu or a drop on the map
+     */
+    void setOnSetPosition(BiConsumer<List<MediaFile>, LatLon> handler) {
+        onSetPosition = Objects.requireNonNull(handler);
+    }
+
+    // for the track list and the UI tests
     LeafletMapView mapView() {
         return mapView;
     }

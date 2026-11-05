@@ -29,9 +29,12 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.TimeoutException;
+import javafx.scene.Node;
+import javafx.scene.control.TableRow;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
 import javafx.scene.input.KeyCode;
+import javafx.scene.web.WebView;
 import javafx.stage.Stage;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
@@ -44,11 +47,14 @@ import org.testfx.framework.junit5.Start;
 import org.testfx.framework.junit5.Stop;
 import org.testfx.util.WaitForAsyncUtils;
 import tf.exiftool.ExifTool;
+import tf.geo.LatLon;
 import tf.geotagger.metadata.ExifToolTestSupport;
 import tf.geotagger.metadata.TestFiles;
 import tf.geotagger.model.Field;
 import tf.geotagger.model.MediaFile;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * UI tests of the map: markers, selection, moving markers.
@@ -183,6 +189,41 @@ class GeoTaggerMapUiTest {
         assertEquals(11.25, file.longitude(), 1e-9);
         robot.clickOn("#undoButton");
         assertEquals(46.5, file.latitude(), 1e-9);
+    }
+
+    @Test
+    void contextMenuSetsThePositionOfTheSelection(FxRobot robot) throws TimeoutException {
+        loadImages(robot);
+        js(robot, "myMap.setView([46.0, 11.0], 16, {animate: false})");
+        robot.interact(() -> table(robot).getSelectionModel().selectAll());
+        final WebView web = controller.mapPane().mapView().getWebView();
+        // the robot right-clicks the centre of the WebView
+        final LatLon expected = WaitForAsyncUtils.waitFor(WaitForAsyncUtils.asyncFx(
+                () -> controller.mapPane().mapView().latLonAt(web.getWidth() / 2, web.getHeight() / 2))).orElseThrow();
+
+        robot.rightClickOn(web);
+        robot.clickOn("#setPositionHere");
+
+        for (MediaFile file : table(robot).getItems()) {
+            assertEquals(expected.latitude(), file.latitude(), 1e-3);
+            assertEquals(expected.longitude(), file.longitude(), 1e-3);
+        }
+        robot.clickOn("#undoButton");
+        assertFalse(fileNamed(table(robot), "c.jpg").hasCoordinates());
+    }
+
+    @Test
+    void draggingFilesOntoTheMapSetsTheirPosition(FxRobot robot) throws TimeoutException {
+        loadImages(robot);
+        js(robot, "myMap.setView([46.0, 11.0], 16, {animate: false})");
+        final MediaFile file = select(robot, "c.jpg");
+        final Node row = robot.lookup(".table-row-cell").match((Node node) -> ((TableRow<?>) node).getItem() == file).query();
+
+        robot.drag(row).dropTo(controller.mapPane().mapView().getWebView());
+        WaitForAsyncUtils.waitForFxEvents();
+
+        assertTrue(file.hasCoordinates());
+        assertEquals(46.0, file.latitude(), 0.05);
     }
 
     @Test
