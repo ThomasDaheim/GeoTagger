@@ -59,7 +59,7 @@ public enum GeoTaggerPreferences implements IPreferencesStore {
     // additional preferences not handled here as enums
     // tableview settings: ColumnOrder, ColumnWidth, ColumnVisibility, SortOrder - see tf.helper.javafx.TableViewPreferences
 
-    private static final Preferences MYPREFERENCES = Preferences.userNodeForPackage(GeoTaggerManager.class);
+    private static final Preferences MYPREFERENCES = preferencesNode();
 
     // recently opened folders - like the recent files of GPXEditor
     private static final RecentFiles MYRECENTFOLDERS = new RecentFiles(INSTANCE, 10, true);
@@ -72,6 +72,15 @@ public enum GeoTaggerPreferences implements IPreferencesStore {
         myPrefKey = key;
         myDefaultValue = defaultValue;
         myClass = classP;
+    }
+
+    // tests use their own node (set by the Gradle test tasks) - the real settings stay untouched
+    private static Preferences preferencesNode() {
+        final String testNode = System.getProperty("geotagger.preferences");
+        if (testNode != null && !testNode.isBlank()) {
+            return Preferences.userRoot().node(testNode);
+        }
+        return Preferences.userNodeForPackage(GeoTaggerManager.class);
     }
 
     public static RecentFiles getRecentFolders() {
