@@ -80,6 +80,9 @@ class FieldTextTest {
         assertEquals(-(33 + 52.5 / 60.0), (Double) FieldText.parse(Field.LATITUDE, "33° 52,5' s"), 1e-9);
         assertEquals(-(11 + 20 / 60.0 + 30.5 / 3600.0), (Double) FieldText.parse(Field.LONGITUDE, "11°20'30.5\"W"), 1e-9);
         assertEquals(11.5, (Double) FieldText.parse(Field.LONGITUDE, "E 11.5"), 1e-9);
+        // German "Ost"
+        assertEquals(11 + 34 / 60.0 + 32 / 3600.0, (Double) FieldText.parse(Field.LONGITUDE, "11° 34′ 32″ O"), 1e-9);
+        assertEquals(11.5, (Double) FieldText.parse(Field.LONGITUDE, "o 11.5"), 1e-9);
         assertEquals(48.5, (Double) FieldText.parse(Field.LATITUDE, "48,5°"), 1e-9);
         assertEquals(-48.5, (Double) FieldText.parse(Field.LATITUDE, "-48.5°"), 1e-9);
     }

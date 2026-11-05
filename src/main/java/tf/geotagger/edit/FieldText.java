@@ -50,11 +50,13 @@ public final class FieldText {
     private static final Pattern DEGREES_MINUTES_SECONDS = Pattern.compile(
             "(\\d+)" + DEGREE_SIGN + "\\s*(\\d+)" + MINUTE_SIGN + "\\s*" + NUMBER + SECOND_SIGN);
 
-    private record DegreeFormat(String name, double limit, char positive, char negative, String decimalExample,
+    // positive / negative: letters of the hemispheres, in upper case
+    private record DegreeFormat(String name, double limit, String positive, String negative, String decimalExample,
             String degreeExample) {
     }
-    private static final DegreeFormat LATITUDE_FORMAT = new DegreeFormat("Latitude", 90, 'N', 'S', "46.5", "46° 30' 0\" N");
-    private static final DegreeFormat LONGITUDE_FORMAT = new DegreeFormat("Longitude", 180, 'E', 'W', "11.5", "11° 30' 0\" E");
+    private static final DegreeFormat LATITUDE_FORMAT = new DegreeFormat("Latitude", 90, "N", "S", "46.5", "46° 30' 0\" N");
+    // "O" is the German "Ost"
+    private static final DegreeFormat LONGITUDE_FORMAT = new DegreeFormat("Longitude", 180, "EO", "W", "11.5", "11° 30' 0\" E");
 
     private FieldText() {
     }
@@ -151,10 +153,10 @@ public final class FieldText {
     }
 
     private static int hemisphereSign(char letter, DegreeFormat format, IllegalArgumentException invalid) {
-        if (letter == format.positive()) {
+        if (format.positive().indexOf(letter) >= 0) {
             return 1;
         }
-        if (letter == format.negative()) {
+        if (format.negative().indexOf(letter) >= 0) {
             return -1;
         }
         throw invalid;
