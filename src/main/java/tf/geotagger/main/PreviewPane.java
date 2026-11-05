@@ -171,6 +171,10 @@ public class PreviewPane extends BorderPane {
      */
     public void show(MediaFile file, List<MediaFile> neighbours) {
         final Path path = file.path();
+        if (path.equals(current)) {
+            // already shown or loading - e.g. when the selection is restored after a change
+            return;
+        }
         current = path;
         currentPreview = null;
         imageView.setImage(null);

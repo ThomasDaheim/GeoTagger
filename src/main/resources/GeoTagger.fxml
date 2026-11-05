@@ -5,9 +5,12 @@
 <?import javafx.scene.control.CheckBox?>
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.ProgressBar?>
+<?import javafx.scene.control.ScrollPane?>
 <?import javafx.scene.control.Separator?>
 <?import javafx.scene.control.SplitMenuButton?>
 <?import javafx.scene.control.SplitPane?>
+<?import javafx.scene.control.Tab?>
+<?import javafx.scene.control.TabPane?>
 <?import javafx.scene.control.TableColumn?>
 <?import javafx.scene.control.TableView?>
 <?import javafx.scene.control.ToolBar?>
@@ -15,6 +18,8 @@
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.StackPane?>
 <?import javafx.scene.layout.VBox?>
+<?import tf.geotagger.main.DetailsPane?>
+<?import tf.geotagger.main.ImageInfoPane?>
 <?import tf.geotagger.main.PreviewPane?>
 
 <BorderPane xmlns="http://javafx.com/javafx" xmlns:fx="http://javafx.com/fxml" fx:controller="tf.geotagger.main.GeoTagger">
@@ -22,6 +27,10 @@
         <ToolBar>
             <SplitMenuButton fx:id="openFolderButton" text="Open folder..." onAction="#openFolder" disable="true"/>
             <CheckBox fx:id="includeSubfoldersCheck" text="Include subfolders"/>
+            <Separator orientation="VERTICAL"/>
+            <Button fx:id="saveButton" text="Save" onAction="#save" disable="true"/>
+            <Button fx:id="undoButton" text="Undo" onAction="#undo" disable="true"/>
+            <Button fx:id="redoButton" text="Redo" onAction="#redo" disable="true"/>
             <Separator orientation="VERTICAL"/>
             <Button fx:id="preferencesButton" text="Preferences..." onAction="#showPreferences"/>
         </ToolBar>
@@ -51,9 +60,21 @@
                 </VBox>
                 <PreviewPane fx:id="previewPane"/>
             </SplitPane>
-            <StackPane>
-                <Label text="Map, details and tracks follow in the next steps" wrapText="true"/>
-            </StackPane>
+            <SplitPane fx:id="rightSplit" orientation="VERTICAL">
+                <StackPane>
+                    <Label text="The map follows in the next step" wrapText="true"/>
+                </StackPane>
+                <TabPane fx:id="infoTabs" tabClosingPolicy="UNAVAILABLE">
+                    <Tab text="Details">
+                        <ScrollPane fitToWidth="true">
+                            <DetailsPane fx:id="detailsPane"/>
+                        </ScrollPane>
+                    </Tab>
+                    <Tab fx:id="imageInfoTab" text="Image info">
+                        <ImageInfoPane fx:id="imageInfoPane"/>
+                    </Tab>
+                </TabPane>
+            </SplitPane>
         </SplitPane>
     </center>
     <bottom>

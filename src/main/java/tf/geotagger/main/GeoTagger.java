@@ -34,13 +34,17 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.ResourceBundle;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.Predicate;
 import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.collections.FXCollections;
+import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
 import javafx.collections.transformation.SortedList;
@@ -49,41 +53,56 @@ import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonBar;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.MenuItem;
+import javafx.scene.control.MultipleSelectionModel;
 import javafx.scene.control.ProgressBar;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.SplitMenuButton;
 import javafx.scene.control.SplitPane;
+import javafx.scene.control.Tab;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.control.ToggleGroup;
+import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.HBox;
 import javafx.stage.DirectoryChooser;
 import javafx.stage.Stage;
 import tf.exiftool.ExifTool;
 import tf.exiftool.ExifToolException;
+import tf.geotagger.edit.ChangeFieldsAction;
 import tf.geotagger.files.FolderScanner;
 import tf.geotagger.metadata.ExifToolLocator;
 import tf.geotagger.metadata.MetadataReader;
+import tf.geotagger.metadata.MetadataWriter;
+import tf.geotagger.metadata.SaveResult;
+import tf.geotagger.metadata.SaveSummary;
 import tf.geotagger.model.CaptureTime;
 import tf.geotagger.model.Field;
 import tf.geotagger.model.MediaFile;
 import tf.geotagger.model.MediaFilter;
 import tf.geotagger.preview.PreviewProvider;
+import tf.helper.doundo.DoUndoManager;
 import tf.helper.javafx.ShowAlerts;
 import tf.helper.javafx.TableViewPreferences;
+import tf.helper.javafx.UsefulKeyCodes;
 
 /**
- * Controller of the main window (GeoTagger.fxml): ExifTool start, folder loading, file list with filters.
+ * Controller of the main window (GeoTagger.fxml): ExifTool start, folder loading, file list with filters, preview,
+ * details / image info, undo / redo and saving.
  */
 public class GeoTagger implements Initializable {
     private static final String TABLE_PREFERENCES = "mediaTable";
     private static final DateTimeFormatter CAPTURE_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final String YES = "\u2713";
     private static final String NO = "\u2013";
+    // field changed, not saved yet
+    private static final String CHANGED = "\u25CF";
+    private static final Field[] PLACE_FIELDS = Field.PLACE_FIELDS.toArray(new Field[0]);
     // extracted previews of RAW / HEIC / videos - emptied when GeoTagger ends
     private static final Path PREVIEW_CACHE = Path.of(System.getProperty("java.io.tmpdir"), "GeoTagger", "preview");
 
@@ -92,11 +111,19 @@ public class GeoTagger implements Initializable {
     @FXML
     private CheckBox includeSubfoldersCheck;
     @FXML
+    private Button saveButton;
+    @FXML
+    private Button undoButton;
+    @FXML
+    private Button redoButton;
+    @FXML
     private Button preferencesButton;
     @FXML
     private SplitPane centralSplit;
     @FXML
     private SplitPane leftSplit;
+    @FXML
+    private SplitPane rightSplit;
     @FXML
     private HBox filterBox;
     @FXML
@@ -119,14 +146,20 @@ public class GeoTagger implements Initializable {
     private ProgressBar progressBar;
     @FXML
     private PreviewPane previewPane;
+    @FXML
+    private Tab imageInfoTab;
+    @FXML
+    private DetailsPane detailsPane;
+    @FXML
+    private ImageInfoPane imageInfoPane;
 
     private final ObservableList<MediaFile> files = FXCollections.observableArrayList();
     private final FilteredList<MediaFile> filteredFiles = new FilteredList<>(files);
     private final ToggleGroup filterGroup = new ToggleGroup();
     private final Map<MediaFilter, ToggleButton> filterButtons = new EnumMap<>(MediaFilter.class);
-    // one loader thread - ExifTool handles one command at a time anyway
-    private final ExecutorService loader = Executors.newSingleThreadExecutor(runnable -> {
-        final Thread thread = new Thread(runnable, "GeoTagger-loader");
+    // one worker thread for loading and saving - ExifTool handles one command at a time anyway
+    private final ExecutorService worker = Executors.newSingleThreadExecutor(runnable -> {
+        final Thread thread = new Thread(runnable, "GeoTagger-worker");
         thread.setDaemon(true);
         return thread;
     });
@@ -134,22 +167,25 @@ public class GeoTagger implements Initializable {
     private Stage stage;
     // folder the files were loaded from - names are shown relative to it
     private Path folder;
+    // volatile: UI tests wait for it from their own thread
+    private volatile boolean busy = false;
     private ExifTool exifTool;
     private MetadataReader reader;
+    private MetadataWriter writer;
     private PreviewProvider previewProvider;
-    // volatile: UI tests read it from their own thread
-    private volatile boolean busy = false;
 
     @Override
     public void initialize(URL location, ResourceBundle resources) {
         initTable();
         initFilters();
         initPreview();
+        initDetails();
         updateRecentFolders();
+        DoUndoManager.getInstance().changeCountProperty().addListener((observable, oldValue, newValue) -> updateButtons());
     }
 
     /**
-     * Called once the stage is shown: restores the layout and starts ExifTool.
+     * Called once the stage is shown: restores the layout, starts ExifTool and guards against losing changes.
      *
      * @param stage the main window
      */
@@ -161,7 +197,28 @@ public class GeoTagger implements Initializable {
         centralSplit.setDividerPositions(centralDivider);
         final Double leftDivider = GeoTaggerPreferences.RECENT_LEFT_DIVIDER_POS.getAsType();
         leftSplit.setDividerPositions(leftDivider);
+        final Double rightDivider = GeoTaggerPreferences.RECENT_RIGHT_DIVIDER_POS.getAsType();
+        rightSplit.setDividerPositions(rightDivider);
         TableViewPreferences.loadTableViewPreferences(mediaTable, TABLE_PREFERENCES, GeoTaggerPreferences.INSTANCE);
+
+        // like GPXEditor - text fields handle ctrl+z themselves, the rest of the window gets undo / redo
+        stage.getScene().addEventHandler(KeyEvent.KEY_PRESSED, event -> {
+            if (UsefulKeyCodes.CNTRL_Z.match(event)) {
+                undo();
+            }
+            if (UsefulKeyCodes.CNTRL_Y.match(event)) {
+                redo();
+            }
+        });
+        stage.setOnCloseRequest(event -> {
+            if (busy) {
+                // loading or saving - closing now could lose changes
+                event.consume();
+            } else if (hasUnsavedChanges()) {
+                event.consume();
+                confirmUnsavedChanges(stage::close);
+            }
+        });
         initExifTool();
     }
 
@@ -171,10 +228,12 @@ public class GeoTagger implements Initializable {
     public void stop() {
         GeoTaggerPreferences.RECENT_CENTRAL_DIVIDER_POS.put(centralSplit.getDividerPositions()[0]);
         GeoTaggerPreferences.RECENT_LEFT_DIVIDER_POS.put(leftSplit.getDividerPositions()[0]);
+        GeoTaggerPreferences.RECENT_RIGHT_DIVIDER_POS.put(rightSplit.getDividerPositions()[0]);
         GeoTaggerPreferences.INCLUDE_SUBFOLDERS.put(includeSubfoldersCheck.isSelected());
         TableViewPreferences.saveTableViewPreferences(mediaTable, TABLE_PREFERENCES, GeoTaggerPreferences.INSTANCE);
-        loader.shutdownNow();
+        worker.shutdownNow();
         previewPane.dispose();
+        imageInfoPane.dispose();
         closeExifTool();
         if (previewProvider != null) {
             previewProvider.clearCache();
@@ -190,18 +249,21 @@ public class GeoTagger implements Initializable {
         nameColumn.setCellValueFactory(cell -> new ReadOnlyStringWrapper(displayName(cell.getValue())));
         captureTimeColumn.setCellValueFactory(cell -> new ReadOnlyStringWrapper(captureTime(cell.getValue())));
         placeColumn.setCellValueFactory(cell -> new ReadOnlyStringWrapper(place(cell.getValue())));
-        coordinatesStatusColumn.setCellValueFactory(cell -> new ReadOnlyStringWrapper(status(cell.getValue().hasCoordinates())));
-        placeStatusColumn.setCellValueFactory(cell -> new ReadOnlyStringWrapper(status(cell.getValue().hasPlace())));
-        altitudeStatusColumn.setCellValueFactory(cell -> new ReadOnlyStringWrapper(status(cell.getValue().hasAltitude())));
+        coordinatesStatusColumn.setCellValueFactory(cell -> new ReadOnlyStringWrapper(
+                status(cell.getValue(), cell.getValue().hasCoordinates(), Field.LATITUDE, Field.LONGITUDE)));
+        placeStatusColumn.setCellValueFactory(cell -> new ReadOnlyStringWrapper(
+                status(cell.getValue(), cell.getValue().hasPlace(), PLACE_FIELDS)));
+        altitudeStatusColumn.setCellValueFactory(cell -> new ReadOnlyStringWrapper(
+                status(cell.getValue(), cell.getValue().hasAltitude(), Field.ALTITUDE)));
     }
 
     private void initFilters() {
         for (MediaFilter filter : MediaFilter.values()) {
             final ToggleButton button = new ToggleButton(filter.label());
+            // UI tests find the buttons by ID, e.g. #filter-WITHOUT_COORDINATES
+            button.setId("filter-" + filter.name());
             button.setToggleGroup(filterGroup);
             button.setUserData(filter);
-            // e.g. #filter-WITHOUT_COORDINATES - used by the UI tests
-            button.setId("filter-" + filter.name());
             filterButtons.put(filter, button);
             filterBox.getChildren().add(button);
         }
@@ -246,6 +308,105 @@ public class GeoTagger implements Initializable {
         previewPane.show(file, neighbours);
     }
 
+    private void initDetails() {
+        mediaTable.getSelectionModel().getSelectedItems().addListener((ListChangeListener<MediaFile>) change -> selectionChanged());
+        imageInfoTab.setOnSelectionChanged(event -> showImageInfo());
+        detailsPane.setOnEdit((field, value) -> perform(ChangeFieldsAction.sameValue(
+                "Set " + DetailsPane.label(field).toLowerCase(Locale.ROOT), selectedFiles(), field, value)));
+    }
+
+    private void selectionChanged() {
+        detailsPane.setFiles(selectedFiles());
+        showImageInfo();
+    }
+
+    private void showImageInfo() {
+        // reading all tags takes a moment - only while the tab is visible
+        if (imageInfoTab.isSelected()) {
+            final MediaFile file = mediaTable.getSelectionModel().getSelectedItem();
+            imageInfoPane.show(file == null ? null : file.path());
+        }
+    }
+
+    private List<MediaFile> selectedFiles() {
+        return mediaTable.getSelectionModel().getSelectedItems().stream().filter(Objects::nonNull).toList();
+    }
+
+    /**
+     * Executes a change as one undo / redo step and shows its result.
+     *
+     * @param action change of pending values - not done yet
+     */
+    private void perform(ChangeFieldsAction action) {
+        if (folder == null) {
+            return;
+        }
+        action.doAction();
+        DoUndoManager.getInstance().addDoneAction(action, undoKey());
+        refreshFiles();
+    }
+
+    @FXML
+    private void undo() {
+        if (!busy && folder != null && DoUndoManager.getInstance().canUndo(undoKey())) {
+            DoUndoManager.getInstance().singleUndo(undoKey());
+            refreshFiles();
+        }
+    }
+
+    @FXML
+    private void redo() {
+        if (!busy && folder != null && DoUndoManager.getInstance().canDo(undoKey())) {
+            DoUndoManager.getInstance().singleDo(undoKey());
+            refreshFiles();
+        }
+    }
+
+    private String undoKey() {
+        return "GeoTagger:" + folder;
+    }
+
+    // MediaFile has no change events: after each change re-apply the filter, redraw the rows, update counts and
+    // buttons - and keep the selection
+    private void refreshFiles() {
+        final MultipleSelectionModel<MediaFile> selection = mediaTable.getSelectionModel();
+        final List<MediaFile> selected = selectedFiles();
+        final MediaFile focused = selection.getSelectedItem();
+
+        final Predicate<? super MediaFile> predicate = filteredFiles.getPredicate();
+        filteredFiles.setPredicate(null);
+        filteredFiles.setPredicate(predicate);
+
+        final List<MediaFile> items = mediaTable.getItems();
+        selection.clearSelection();
+        for (MediaFile file : selected) {
+            if (file != focused && items.contains(file)) {
+                selection.select(file);
+            }
+        }
+        // select the focused file last - it stays the one shown in preview and image info
+        if (focused != null && items.contains(focused)) {
+            selection.select(focused);
+        }
+
+        mediaTable.refresh();
+        updateFilterCounts();
+        updateButtons();
+        detailsPane.setFiles(selectedFiles());
+    }
+
+    private boolean hasUnsavedChanges() {
+        return files.stream().anyMatch(MediaFile::isChanged);
+    }
+
+    private void updateButtons() {
+        final long changed = files.stream().filter(MediaFile::isChanged).count();
+        saveButton.setText(changed == 0 ? "Save" : "Save (" + changed + ")");
+        saveButton.setDisable(busy || changed == 0);
+        undoButton.setDisable(busy || folder == null || !DoUndoManager.getInstance().canUndo(undoKey()));
+        redoButton.setDisable(busy || folder == null || !DoUndoManager.getInstance().canDo(undoKey()));
+    }
+
     private void initExifTool() {
         if (GeoTaggerPreferences.EXIFTOOL_PATH.getAsString().isBlank()) {
             ExifToolLocator.findOnPath().ifPresent(found -> GeoTaggerPreferences.EXIFTOOL_PATH.put(found.toString()));
@@ -270,13 +431,16 @@ public class GeoTagger implements Initializable {
             final String version = ExifToolLocator.version(executable);
             exifTool = new ExifTool(executable);
             reader = new MetadataReader(exifTool);
+            writer = new MetadataWriter(exifTool, reader);
             previewProvider = new PreviewProvider(exifTool, PREVIEW_CACHE);
             previewPane.setPreviewProvider(previewProvider);
+            imageInfoPane.setExifTool(exifTool);
             openFolderButton.setDisable(false);
             statusLabel.setText("ExifTool " + version + " - " + executable);
             return true;
         } catch (ExifToolException | InvalidPathException ex) {
             previewPane.setPreviewProvider(null);
+            imageInfoPane.setExifTool(null);
             openFolderButton.setDisable(true);
             statusLabel.setText("ExifTool not usable - please check the preferences");
             return false;
@@ -288,6 +452,7 @@ public class GeoTagger implements Initializable {
             exifTool.close();
             exifTool = null;
             reader = null;
+            writer = null;
         }
     }
 
@@ -300,16 +465,18 @@ public class GeoTagger implements Initializable {
 
     @FXML
     private void openFolder() {
-        final DirectoryChooser chooser = new DirectoryChooser();
-        chooser.setTitle("Open folder");
-        final File recent = new File(GeoTaggerPreferences.RECENT_FOLDER.getAsString());
-        if (recent.isDirectory()) {
-            chooser.setInitialDirectory(recent);
-        }
-        final File selected = chooser.showDialog(stage);
-        if (selected != null) {
-            loadAndRemember(selected.toPath());
-        }
+        confirmUnsavedChanges(() -> {
+            final DirectoryChooser chooser = new DirectoryChooser();
+            chooser.setTitle("Open folder");
+            final File recent = new File(GeoTaggerPreferences.RECENT_FOLDER.getAsString());
+            if (recent.isDirectory()) {
+                chooser.setInitialDirectory(recent);
+            }
+            final File selected = chooser.showDialog(stage);
+            if (selected != null) {
+                loadAndRemember(selected.toPath());
+            }
+        });
     }
 
     private void loadAndRemember(Path newFolder) {
@@ -325,7 +492,7 @@ public class GeoTagger implements Initializable {
             final MenuItem item = new MenuItem(recent);
             // the text is a path - no mnemonics
             item.setMnemonicParsing(false);
-            item.setOnAction(event -> loadAndRemember(Path.of(recent)));
+            item.setOnAction(event -> confirmUnsavedChanges(() -> loadAndRemember(Path.of(recent))));
             openFolderButton.getItems().add(item);
         }
         if (openFolderButton.getItems().isEmpty()) {
@@ -335,7 +502,7 @@ public class GeoTagger implements Initializable {
         }
     }
 
-    // package private: UI tests load folders this way instead of through the native folder dialog
+    // UI tests load folders this way instead of through the native folder dialog
     void loadFolder(Path newFolder, boolean includeSubfolders) {
         final MetadataReader folderReader = reader;
         final Task<List<MediaFile>> task = new Task<>() {
@@ -352,10 +519,13 @@ public class GeoTagger implements Initializable {
             }
         };
         task.setOnSucceeded(event -> {
-            finishLoading();
+            finishTask();
+            // the undo history belongs to the files of a folder
+            DoUndoManager.getInstance().clear(undoKey());
             folder = newFolder;
+            DoUndoManager.getInstance().clear(undoKey());
             files.setAll(task.getValue());
-            updateFilterCounts();
+            refreshFiles();
             stage.setTitle(GeoTaggerManager.TITLE + " - " + newFolder);
             statusLabel.setText(files.size() + " files in " + newFolder);
             GeoTaggerPreferences.getRecentFolders().addRecentFile(newFolder.toString());
@@ -363,29 +533,111 @@ public class GeoTagger implements Initializable {
             select(0);
         });
         task.setOnFailed(event -> {
-            finishLoading();
+            finishTask();
             statusLabel.setText("Loading " + newFolder + " failed");
             ShowAlerts.getInstance().showAlert(Alert.AlertType.ERROR, GeoTaggerManager.TITLE, "Can't load " + newFolder,
                     String.valueOf(task.getException().getMessage()));
         });
+        runTask(task);
+    }
 
+    @FXML
+    private void save() {
+        saveChanges(null);
+    }
+
+    /**
+     * Writes all pending changes in the background.
+     *
+     * @param afterSuccess what to do once everything is saved (e.g. close the window), may be null - not called if a
+     * file couldn't be saved
+     */
+    private void saveChanges(Runnable afterSuccess) {
+        final List<MediaFile> changed = files.stream().filter(MediaFile::isChanged).toList();
+        if (changed.isEmpty() || writer == null) {
+            if (afterSuccess != null) {
+                afterSuccess.run();
+            }
+            return;
+        }
+        final MetadataWriter fileWriter = writer;
+        final Task<SaveResult> task = new Task<>() {
+            @Override
+            protected SaveResult call() {
+                final int total = changed.size();
+                updateMessage("Saving " + total + " files ...");
+                updateProgress(0, total);
+                return fileWriter.save(changed, done -> {
+                    updateProgress(done, total);
+                    updateMessage("Saving: " + done + " / " + total);
+                });
+            }
+        };
+        task.setOnSucceeded(event -> {
+            finishTask();
+            final SaveResult result = task.getValue();
+            // the saved values are the new originals - an undo of older steps would only confuse now
+            DoUndoManager.getInstance().clear(undoKey());
+            refreshFiles();
+            imageInfoPane.reload();
+            final String summary = SaveSummary.text(result);
+            statusLabel.setText(summary.lines().findFirst().orElse(""));
+            if (SaveSummary.hasProblems(result)) {
+                ShowAlerts.getInstance().showAlert(Alert.AlertType.WARNING, GeoTaggerManager.TITLE,
+                        "Not all files were saved", summary);
+            } else if (afterSuccess != null) {
+                afterSuccess.run();
+            }
+        });
+        task.setOnFailed(event -> {
+            finishTask();
+            refreshFiles();
+            statusLabel.setText("Saving failed");
+            ShowAlerts.getInstance().showAlert(Alert.AlertType.ERROR, GeoTaggerManager.TITLE, "Saving failed",
+                    String.valueOf(task.getException().getMessage()));
+        });
+        runTask(task);
+    }
+
+    /**
+     * Asks what to do with unsaved changes before they would get lost - see spec, section "Fehlerbehandlung".
+     *
+     * @param proceed what to do afterwards (e.g. open another folder) - not called on "Cancel" or if saving failed
+     */
+    private void confirmUnsavedChanges(Runnable proceed) {
+        final long changed = files.stream().filter(MediaFile::isChanged).count();
+        if (changed == 0) {
+            proceed.run();
+            return;
+        }
+        final ButtonType saveChanges = new ButtonType("Save", ButtonBar.ButtonData.YES);
+        final ButtonType discard = new ButtonType("Discard", ButtonBar.ButtonData.NO);
+        final Optional<ButtonType> answer = ShowAlerts.getInstance().showAlert(Alert.AlertType.CONFIRMATION,
+                GeoTaggerManager.TITLE, changed + " files have unsaved changes", "Save them before continuing?",
+                saveChanges, discard, ButtonType.CANCEL);
+        if (answer.isEmpty() || answer.get() == ButtonType.CANCEL) {
+            return;
+        }
+        if (answer.get() == saveChanges) {
+            saveChanges(proceed);
+        } else {
+            proceed.run();
+        }
+    }
+
+    private void runTask(Task<?> task) {
         statusLabel.textProperty().bind(task.messageProperty());
         progressBar.progressProperty().bind(task.progressProperty());
         progressBar.setVisible(true);
         setBusy(true);
-        loader.submit(task);
+        worker.submit(task);
     }
 
-    private void finishLoading() {
+    private void finishTask() {
         statusLabel.textProperty().unbind();
         progressBar.progressProperty().unbind();
         progressBar.setVisible(false);
         setBusy(false);
-    }
-
-    // for UI tests: true while a folder is loaded in the background
-    boolean isBusy() {
-        return busy;
     }
 
     private void setBusy(boolean busy) {
@@ -393,6 +645,15 @@ public class GeoTagger implements Initializable {
         openFolderButton.setDisable(busy);
         includeSubfoldersCheck.setDisable(busy);
         preferencesButton.setDisable(busy);
+        // the files are changed in the background while saving - no edits meanwhile
+        mediaTable.setDisable(busy);
+        detailsPane.setDisable(busy);
+        updateButtons();
+    }
+
+    // for UI tests: loading or saving still running
+    boolean isBusy() {
+        return busy;
     }
 
     private void select(int index) {
@@ -420,7 +681,13 @@ public class GeoTagger implements Initializable {
         return city != null ? city : Objects.requireNonNullElse(file.text(Field.COUNTRY), "");
     }
 
-    private static String status(boolean present) {
+    private static String status(MediaFile file, boolean present, Field... fields) {
+        final Map<Field, Object> pending = file.pendingChanges();
+        for (Field field : fields) {
+            if (pending.containsKey(field)) {
+                return CHANGED;
+            }
+        }
         return present ? YES : NO;
     }
 }

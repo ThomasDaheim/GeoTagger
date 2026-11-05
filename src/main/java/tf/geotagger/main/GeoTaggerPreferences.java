@@ -51,6 +51,8 @@ public enum GeoTaggerPreferences implements IPreferencesStore {
     RECENT_LEFT_DIVIDER_POS("recentLeftDividerPos", Double.toString(0.55), Double.class),
     // left side vs. map / details
     RECENT_CENTRAL_DIVIDER_POS("recentCentralDividerPos", Double.toString(0.5), Double.class),
+    // map vs. details / image info
+    RECENT_RIGHT_DIVIDER_POS("recentRightDividerPos", Double.toString(0.5), Double.class),
 
     EXIFTOOL_PATH("exifToolPath", "", String.class),
     RECENT_FOLDER("recentFolder", System.getProperty("user.home"), String.class),
