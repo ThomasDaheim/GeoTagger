@@ -4,8 +4,8 @@
 //
 // Requirements
 //   - JDK 25 (Gradle toolchain) - Gradle 9 via gradlew
-//   - in the local maven repo (~/.m2): tf.ExifToolHelper:ExifToolHelper and tf.JavaHelper:JavaHelper
-//     (build them in their projects with "gradlew build"); tf.GeoHelper:GeoHelper follows with plan 4 (map)
+//   - in the local maven repo (~/.m2): tf.ExifToolHelper:ExifToolHelper, tf.GeoHelper:GeoHelper (map) and
+//     tf.JavaHelper:JavaHelper (build them in their projects with "gradlew build")
 //   - ExifTool: the application asks for it in the preferences; tests look for it in EXIFTOOL_PATH and then on the
 //     PATH - without it they are skipped
 //
@@ -18,6 +18,8 @@
 //   - compile: JavaFX jars on the classpath are sufficient
 //   - run / test / uiTest: the JavaFX jars of the current platform are put on the module path, all other jars stay on
 //     the classpath
+//   - jdk.jsobject (netscape.javascript.JSObject for the map) comes from JavaFX via --upgrade-module-path - the JDK
+//     module is deprecated for removal since JDK 24 (same as GPXEditor)
 //   - start scripts (installDist) and jpackage follow later, once there is something to install
 // =====================================================================================================================
 
@@ -64,10 +66,15 @@ dependencies {
     implementation "org.openjfx:javafx-graphics:$javafxVersion:$fxPlatform"
     implementation "org.openjfx:javafx-controls:$javafxVersion:$fxPlatform"
     implementation "org.openjfx:javafx-fxml:$javafxVersion:$fxPlatform"
+    // map: WebView (needs media) and JSObject from JavaFX
+    implementation "org.openjfx:javafx-media:$javafxVersion:$fxPlatform"
+    implementation "org.openjfx:javafx-web:$javafxVersion:$fxPlatform"
+    implementation "org.openjfx:jdk-jsobject:$javafxVersion:$fxPlatform"
 
     // our own helper libraries
     implementation 'tf.JavaHelper:JavaHelper:1.17'
     implementation 'tf.ExifToolHelper:ExifToolHelper:0.1'
+    implementation 'tf.GeoHelper:GeoHelper:0.1'
 
     // same look as GPXEditor
     implementation 'org.jfxtras:jmetro:11.6.16'
@@ -89,29 +96,44 @@ dependencies {
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
-tasks.withType(JavaCompile).configureEach {
-    options.encoding = 'UTF-8'
-    options.compilerArgs += ['-Xlint:unchecked', '-Xlint:deprecation']
-}
-
 // JavaFX needs to be on the module path at runtime - only the platform specific jars
 // maven delivers each JavaFX module twice: an empty javafx-base-25.0.1.jar and the real javafx-base-25.0.1-win.jar - keep only the latter
 def javafxJars = configurations.runtimeClasspath.filter { it.name.startsWith('javafx-') && !(it.name ==~ /javafx-[a-z]+-[\d.]+\.jar/) }
+// jdk.jsobject from JavaFX instead of the JDK - "upgradeable" module: on the normal module path the JDK module would win
+def jsobjectJar = configurations.runtimeClasspath.filter { it.name.startsWith('jdk-jsobject-') && !(it.name ==~ /jdk-jsobject-[\d.]+\.jar/) }
 
-// adds "--module-path <files>" to the JVM of run - evaluated lazily when the task executes (same as GPXEditor)
+// adds "<option> <files>" to javac and the JVM of run / test - evaluated lazily when the task executes (same as GPXEditor)
+// option: --module-path for the javafx jars, --upgrade-module-path for jdk.jsobject
 abstract class ModulePathArgumentProvider implements CommandLineArgumentProvider {
+    @Input
+    abstract Property<String> getOption()
+
     @InputFiles
     @PathSensitive(PathSensitivity.NAME_ONLY)
     abstract ConfigurableFileCollection getModulePath()
 
+    ModulePathArgumentProvider() {
+        option.convention('--module-path')
+    }
+
     @Override
     Iterable<String> asArguments() {
-        return ['--module-path', modulePath.asPath]
+        return [option.get(), modulePath.asPath]
     }
 }
 
+// no --module-path needed for compiling - only jdk.jsobject, otherwise javac uses the deprecated one of the JDK
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.compilerArgs += ['-Xlint:unchecked', '-Xlint:deprecation']
+    options.compilerArgumentProviders.add(objects.newInstance(ModulePathArgumentProvider).tap {
+        option = '--upgrade-module-path'
+        modulePath.from(jsobjectJar)
+    })
+}
+
 // JVM options needed to run GeoTagger - JMetro and JavaHelper use JavaFX internals (exports as in GPXEditor)
-def jvmFlags = ['--add-modules', 'javafx.controls,javafx.graphics,javafx.base,javafx.fxml',
+def jvmFlags = ['--add-modules', 'javafx.controls,javafx.graphics,javafx.base,javafx.fxml,javafx.web',
                 '--add-exports', 'javafx.graphics/com.sun.javafx.util=ALL-UNNAMED',
                 '--add-exports', 'javafx.base/com.sun.javafx.reflect=ALL-UNNAMED',
                 '--add-exports', 'javafx.base/com.sun.javafx.beans=ALL-UNNAMED',
@@ -130,6 +152,7 @@ def jvmFlags = ['--add-modules', 'javafx.controls,javafx.graphics,javafx.base,ja
                 '--add-exports', 'javafx.graphics/com.sun.javafx.scene.input=ALL-UNNAMED',
                 '--add-opens', 'javafx.graphics/javafx.scene.layout=ALL-UNNAMED',
                 '--enable-native-access', 'javafx.graphics',
+                '--enable-native-access', 'javafx.web',
                 '--enable-native-access', 'ALL-UNNAMED',
     ]
 
@@ -140,6 +163,7 @@ application {
 
 tasks.named('run', JavaExec) {
     jvmArgumentProviders.add(objects.newInstance(ModulePathArgumentProvider).tap { modulePath.from(javafxJars) })
+    jvmArgumentProviders.add(objects.newInstance(ModulePathArgumentProvider).tap { option = '--upgrade-module-path'; modulePath.from(jsobjectJar) })
     enableAssertions = true
 }
 
@@ -158,7 +182,10 @@ def testJvmFlags = jvmFlags + ['--add-opens', 'javafx.graphics/com.sun.javafx.ap
 
 tasks.withType(Test).configureEach {
     jvmArgumentProviders.add(objects.newInstance(ModulePathArgumentProvider).tap { modulePath.from(javafxJars) })
+    jvmArgumentProviders.add(objects.newInstance(ModulePathArgumentProvider).tap { option = '--upgrade-module-path'; modulePath.from(jsobjectJar) })
     jvmArgs(testJvmFlags)
+    // every UI test starts a WebView for the map
+    maxHeapSize = '1g'
     // tests use their own preferences node - the real settings of GeoTagger stay untouched
     systemProperty 'geotagger.preferences', 'tf/geotagger/test'
     // TestFX moves the mouse with the AWT robot
