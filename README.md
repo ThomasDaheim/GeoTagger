@@ -22,9 +22,13 @@ Work in progress. Available so far:
   * coordinates as decimal degrees (`46.5`, `46,5`) or degrees with hemisphere (`48° 08′ 14″ N`, `11° 34′ 32″ O`)
 * undo / redo (Ctrl+Z / Ctrl+Y), save (Ctrl+S), open folder (Ctrl+O)
 * image info: all tags of the selected file as ExifTool reports them
+* map (Leaflet via [GeoHelper](https://github.com/ThomasDaheim/GeoHelper)) with clustered markers - saved positions blue, changed ones orange, selected files red
+  * set positions by dragging files from the list onto the map, by "Set position of n files here" (right click) or by dragging a selected marker
+  * clicking a marker selects its file
+* track list: GPX files of the folder, check to load and show them on the map, "+ GPX" for files from elsewhere
 * GPX reading and track sync logic (the sync dialog follows)
 
-Planned next: map (in [GeoHelper](https://github.com/ThomasDaheim/GeoHelper)), geo services (reverse geocoding, altitude, time zone) and the track sync dialog.
+Planned next: geo services (reverse geocoding, altitude, time zone) and the track sync dialog.
 
 ## Notes
 
