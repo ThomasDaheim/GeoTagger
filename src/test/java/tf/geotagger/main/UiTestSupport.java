@@ -83,4 +83,15 @@ final class UiTestSupport {
         // the result is shown in an event handler on the JavaFX thread - wait until it has run
         WaitForAsyncUtils.waitForFxEvents();
     }
+
+    /**
+     * Waits until the map page is loaded - markers and tracks given before are shown then.
+     *
+     * @param controller controller of the main window
+     * @throws TimeoutException if the map isn't ready within 30 seconds
+     */
+    static void waitUntilMapReady(GeoTagger controller) throws TimeoutException {
+        WaitForAsyncUtils.waitFor(30, TimeUnit.SECONDS, () -> controller.mapPane().isReady());
+        WaitForAsyncUtils.waitForFxEvents();
+    }
 }

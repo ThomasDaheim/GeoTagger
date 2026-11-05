@@ -16,10 +16,10 @@
 <?import javafx.scene.control.ToolBar?>
 <?import javafx.scene.layout.BorderPane?>
 <?import javafx.scene.layout.HBox?>
-<?import javafx.scene.layout.StackPane?>
 <?import javafx.scene.layout.VBox?>
 <?import tf.geotagger.main.DetailsPane?>
 <?import tf.geotagger.main.ImageInfoPane?>
+<?import tf.geotagger.main.MapPane?>
 <?import tf.geotagger.main.PreviewPane?>
 
 <BorderPane xmlns="http://javafx.com/javafx" xmlns:fx="http://javafx.com/fxml" fx:controller="tf.geotagger.main.GeoTagger">
@@ -61,9 +61,7 @@
                 <PreviewPane fx:id="previewPane"/>
             </SplitPane>
             <SplitPane fx:id="rightSplit" orientation="VERTICAL">
-                <StackPane>
-                    <Label text="The map follows in the next step" wrapText="true"/>
-                </StackPane>
+                <MapPane fx:id="mapPane"/>
                 <TabPane fx:id="infoTabs" tabClosingPolicy="UNAVAILABLE">
                     <Tab text="Details">
                         <ScrollPane fitToWidth="true">

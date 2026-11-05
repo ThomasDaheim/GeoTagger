@@ -33,6 +33,7 @@ import java.nio.file.Path;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -78,6 +79,7 @@ import javafx.stage.DirectoryChooser;
 import javafx.stage.Stage;
 import tf.exiftool.ExifTool;
 import tf.exiftool.ExifToolException;
+import tf.geo.LatLon;
 import tf.geotagger.edit.ChangeFieldsAction;
 import tf.geotagger.files.FolderScanner;
 import tf.geotagger.metadata.ExifToolLocator;
@@ -156,6 +158,8 @@ public class GeoTagger implements Initializable {
     private DetailsPane detailsPane;
     @FXML
     private ImageInfoPane imageInfoPane;
+    @FXML
+    private MapPane mapPane;
 
     private final ObservableList<MediaFile> files = FXCollections.observableArrayList();
     private final FilteredList<MediaFile> filteredFiles = new FilteredList<>(files);
@@ -188,6 +192,7 @@ public class GeoTagger implements Initializable {
         initFilters();
         initPreview();
         initDetails();
+        initMap();
         updateRecentFolders();
         DoUndoManager.getInstance().changeCountProperty().addListener(undoListener);
     }
@@ -253,6 +258,7 @@ public class GeoTagger implements Initializable {
         DoUndoManager.getInstance().changeCountProperty().removeListener(undoListener);
         worker.shutdownNow();
         previewPane.dispose();
+        mapPane.dispose();
         imageInfoPane.dispose();
         closeExifTool();
         if (previewProvider != null) {
@@ -344,8 +350,57 @@ public class GeoTagger implements Initializable {
     }
 
     private void selectionChanged() {
-        detailsPane.setFiles(selectedFiles());
+        final List<MediaFile> selected = selectedFiles();
+        detailsPane.setFiles(selected);
         showImageInfo();
+        mapPane.showFiles(files, selected);
+        // several files: the user picks them - the map stays where it is
+        if (selected.size() == 1) {
+            mapPane.panToFile(selected.get(0));
+        }
+    }
+
+    private void initMap() {
+        mapPane.setOnFileClicked((file, shiftDown) -> {
+            final int index = mediaTable.getItems().indexOf(file);
+            if (index < 0) {
+                // hidden by the filter
+                return;
+            }
+            if (shiftDown) {
+                mediaTable.getSelectionModel().select(index);
+            } else {
+                mediaTable.getSelectionModel().clearAndSelect(index);
+            }
+            mediaTable.scrollTo(index);
+        });
+        mapPane.setOnFileMoved((file, position) -> setPosition(List.of(file), position, "Set position"));
+    }
+
+    /**
+     * Sets the coordinates of files as one undo / redo step.
+     *
+     * @param changed files to move
+     * @param position their new position
+     * @param description text of the undo step
+     */
+    void setPosition(List<MediaFile> changed, LatLon position, String description) {
+        if (changed.isEmpty()) {
+            return;
+        }
+        final Map<MediaFile, Map<Field, Object>> values = new LinkedHashMap<>();
+        for (MediaFile file : changed) {
+            final Map<Field, Object> fileValues = new EnumMap<>(Field.class);
+            fileValues.put(Field.LATITUDE, position.latitude());
+            fileValues.put(Field.LONGITUDE, position.longitude());
+            values.put(file, fileValues);
+        }
+        perform(new ChangeFieldsAction(description, values));
+    }
+
+    // for the UI tests
+    MapPane mapPane() {
+        return mapPane;
     }
 
     private void showImageInfo() {
@@ -430,6 +485,7 @@ public class GeoTagger implements Initializable {
         updateFilterCounts();
         updateButtons();
         detailsPane.setFiles(selectedFiles());
+        mapPane.showFiles(files, selectedFiles());
     }
 
     private boolean hasUnsavedChanges() {
@@ -567,6 +623,7 @@ public class GeoTagger implements Initializable {
             DoUndoManager.getInstance().clear(undoKey());
             files.setAll(task.getValue());
             refreshFiles();
+            mapPane.fitToFiles(files);
             stage.setTitle(GeoTaggerManager.TITLE + " - " + newFolder);
             statusLabel.setText(files.size() + " files in " + newFolder);
             GeoTaggerPreferences.getRecentFolders().addRecentFile(newFolder.toString());
