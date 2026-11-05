@@ -137,6 +137,8 @@ public class GeoTagger implements Initializable {
     private ExifTool exifTool;
     private MetadataReader reader;
     private PreviewProvider previewProvider;
+    // volatile: UI tests read it from their own thread
+    private volatile boolean busy = false;
 
     @Override
     public void initialize(URL location, ResourceBundle resources) {
@@ -198,6 +200,8 @@ public class GeoTagger implements Initializable {
             final ToggleButton button = new ToggleButton(filter.label());
             button.setToggleGroup(filterGroup);
             button.setUserData(filter);
+            // e.g. #filter-WITHOUT_COORDINATES - used by the UI tests
+            button.setId("filter-" + filter.name());
             filterButtons.put(filter, button);
             filterBox.getChildren().add(button);
         }
@@ -331,7 +335,8 @@ public class GeoTagger implements Initializable {
         }
     }
 
-    private void loadFolder(Path newFolder, boolean includeSubfolders) {
+    // package private: UI tests load folders this way instead of through the native folder dialog
+    void loadFolder(Path newFolder, boolean includeSubfolders) {
         final MetadataReader folderReader = reader;
         final Task<List<MediaFile>> task = new Task<>() {
             @Override
@@ -378,7 +383,13 @@ public class GeoTagger implements Initializable {
         setBusy(false);
     }
 
+    // for UI tests: true while a folder is loaded in the background
+    boolean isBusy() {
+        return busy;
+    }
+
     private void setBusy(boolean busy) {
+        this.busy = busy;
         openFolderButton.setDisable(busy);
         includeSubfoldersCheck.setDisable(busy);
         preferencesButton.setDisable(busy);

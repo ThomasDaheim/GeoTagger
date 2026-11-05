@@ -91,6 +91,11 @@ public class GeoTaggerManager extends Application {
         myGeoTagger.lateInitialize(myStage);
     }
 
+    // for UI tests: access to the controller of the main window
+    GeoTagger controller() {
+        return myGeoTagger;
+    }
+
     @Override
     public void stop() {
         if (myStage != null && !myStage.isMaximized() && !myStage.isIconified()) {
