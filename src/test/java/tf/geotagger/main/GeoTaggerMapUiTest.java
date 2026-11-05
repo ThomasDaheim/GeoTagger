@@ -33,6 +33,7 @@ import javafx.scene.Node;
 import javafx.scene.control.TableRow;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
+import javafx.scene.control.skin.VirtualFlow;
 import javafx.scene.input.KeyCode;
 import javafx.scene.web.WebView;
 import javafx.stage.Stage;
@@ -224,6 +225,31 @@ class GeoTaggerMapUiTest {
 
         assertTrue(file.hasCoordinates());
         assertEquals(46.0, file.latitude(), 0.05);
+    }
+
+    @Test
+    void draggingAColumnHeaderStillMovesTheColumn(FxRobot robot) throws TimeoutException {
+        loadImages(robot);
+        // a file is selected - dragging the header must not start a drag & drop of the selection
+        robot.drag("#nameColumn").moveBy(350, 0).drop();
+        WaitForAsyncUtils.waitForFxEvents();
+        assertTrue(table(robot).getColumns().get(0).getId() != null
+                && !"nameColumn".equals(table(robot).getColumns().get(0).getId()));
+    }
+
+    @Test
+    void draggingTheScrollBarStillScrolls(FxRobot robot) throws TimeoutException {
+        for (int i = 0; i < 80; i++) {
+            TestFiles.image(dir, String.format("img%03d.jpg", i));
+        }
+        robot.interact(() -> controller.loadFolder(dir, false));
+        UiTestSupport.waitUntilIdle(controller);
+        // a file is selected - dragging the scroll bar must not start a drag & drop of the selection
+        final Node thumb = robot.lookup("#mediaTable .scroll-bar:vertical .thumb").query();
+        robot.drag(thumb).moveBy(0, 150).drop();
+        WaitForAsyncUtils.waitForFxEvents();
+        final VirtualFlow<?> flow = robot.lookup("#mediaTable .virtual-flow").queryAs(VirtualFlow.class);
+        assertTrue(flow.getFirstVisibleCell().getIndex() > 20, "first visible row: " + flow.getFirstVisibleCell().getIndex());
     }
 
     @Test
