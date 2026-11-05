@@ -28,11 +28,13 @@ package tf.geotagger.main;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import javafx.scene.control.Label;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.ToggleButton;
+import javafx.scene.image.ImageView;
 import javafx.scene.text.Text;
 import javafx.stage.Stage;
 import org.junit.jupiter.api.BeforeAll;
@@ -44,6 +46,7 @@ import org.testfx.api.FxRobot;
 import org.testfx.framework.junit5.ApplicationExtension;
 import org.testfx.framework.junit5.Start;
 import org.testfx.framework.junit5.Stop;
+import org.testfx.util.WaitForAsyncUtils;
 import tf.exiftool.ExifTool;
 import tf.geotagger.metadata.ExifToolTestSupport;
 import tf.geotagger.metadata.TestFiles;
@@ -139,6 +142,21 @@ class GeoTaggerUiTest {
                 .filter(column -> "coordinatesStatusColumn".equals(column.getId())).findFirst().orElseThrow();
         assertEquals("✓", gpsColumn.getCellData(fileNamed(table, "a.jpg")));
         assertEquals("–", gpsColumn.getCellData(fileNamed(table, "b.jpg")));
+    }
+
+    @Test
+    void smallPreviewsAreNotEnlarged(FxRobot robot) throws TimeoutException {
+        loadThreeImages(robot);
+        final TableView<MediaFile> table = robot.lookup("#mediaTable").queryTableView();
+        final MediaFile file = fileNamed(table, "b.jpg");
+        robot.interact(() -> table.getSelectionModel().clearAndSelect(table.getItems().indexOf(file)));
+
+        // e.g. the 160 x 120 thumbnail of a video - scaled up it only gets blurred
+        final ImageView preview = robot.lookup("#previewPane .image-view").queryAs(ImageView.class);
+        WaitForAsyncUtils.waitFor(10, TimeUnit.SECONDS,
+                () -> preview.getImage() != null && preview.getImage().getProgress() >= 1.0);
+        WaitForAsyncUtils.waitForFxEvents();
+        assertEquals(16.0, preview.getLayoutBounds().getWidth(), 0.5);
     }
 
     @Test

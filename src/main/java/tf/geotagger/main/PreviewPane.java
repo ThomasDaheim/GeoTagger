@@ -25,13 +25,18 @@
  */
 package tf.geotagger.main;
 
+import java.io.IOException;
 import java.nio.file.Path;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import javax.imageio.ImageIO;
+import javax.imageio.ImageReader;
+import javax.imageio.stream.ImageInputStream;
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
 import javafx.geometry.Bounds;
@@ -247,6 +252,12 @@ public class PreviewPane extends BorderPane {
                     showMessage("Can't show " + preview.image().getFileName());
                 }
             });
+            // the size of the image is known only once it is loaded - see updateFit()
+            image.progressProperty().addListener((observable, oldValue, progress) -> {
+                if (progress.doubleValue() >= 1.0 && image == imageView.getImage()) {
+                    updateFit();
+                }
+            });
         } else if (image.isError()) {
             showMessage("Can't show " + preview.image().getFileName());
         }
@@ -254,8 +265,38 @@ public class PreviewPane extends BorderPane {
     }
 
     private synchronized Image scaled(Preview preview) {
-        return cache.computeIfAbsent(preview.image(),
-                path -> new Image(path.toUri().toString(), PREVIEW_SIZE, PREVIEW_SIZE, true, true, true));
+        return cache.computeIfAbsent(preview.image(), path -> {
+            // JavaFX scales up to the requested size as well - small previews keep their own size
+            final ImageSize size = imageSize(path);
+            final double width = size == null ? PREVIEW_SIZE : Math.min(PREVIEW_SIZE, size.width());
+            final double height = size == null ? PREVIEW_SIZE : Math.min(PREVIEW_SIZE, size.height());
+            return new Image(path.toUri().toString(), width, height, true, true, true);
+        });
+    }
+
+    // size from the image header, without decoding the image - null if ImageIO can't tell
+    private record ImageSize(int width, int height) {
+    }
+
+    private static ImageSize imageSize(Path path) {
+        try (ImageInputStream input = ImageIO.createImageInputStream(path.toFile())) {
+            if (input == null) {
+                return null;
+            }
+            final Iterator<ImageReader> readers = ImageIO.getImageReaders(input);
+            if (!readers.hasNext()) {
+                return null;
+            }
+            final ImageReader reader = readers.next();
+            try {
+                reader.setInput(input);
+                return new ImageSize(reader.getWidth(0), reader.getHeight(0));
+            } finally {
+                reader.dispose();
+            }
+        } catch (IOException ex) {
+            return null;
+        }
     }
 
     private void updateFit() {
@@ -267,7 +308,15 @@ public class PreviewPane extends BorderPane {
         final Bounds viewport = scrollPane.getViewportBounds();
         // rotated by 90 / 270 degrees: width and height of the image swap
         final boolean quarterTurn = Math.abs(imageView.getRotate()) % 180 == 90;
-        imageView.setFitWidth(quarterTurn ? viewport.getHeight() : viewport.getWidth());
-        imageView.setFitHeight(quarterTurn ? viewport.getWidth() : viewport.getHeight());
+        double fitWidth = quarterTurn ? viewport.getHeight() : viewport.getWidth();
+        double fitHeight = quarterTurn ? viewport.getWidth() : viewport.getHeight();
+        // only scaled down - small previews (e.g. the 160 x 120 thumbnail of a video) would just get blurred
+        final Image image = imageView.getImage();
+        if (image != null && image.getProgress() >= 1.0 && !image.isError()) {
+            fitWidth = Math.min(fitWidth, image.getWidth());
+            fitHeight = Math.min(fitHeight, image.getHeight());
+        }
+        imageView.setFitWidth(fitWidth);
+        imageView.setFitHeight(fitHeight);
     }
 }
