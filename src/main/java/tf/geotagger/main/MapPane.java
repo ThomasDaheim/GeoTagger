@@ -25,6 +25,7 @@
  */
 package tf.geotagger.main;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -47,6 +48,8 @@ import tf.geo.map.LeafletMapView;
 import tf.geo.map.MapConfig;
 import tf.geo.map.MapListener;
 import tf.geotagger.model.MediaFile;
+import tf.geotagger.track.GpxTrack;
+import tf.geotagger.track.TrackPoint;
 
 /**
  * The map of the main window: markers for the files, selection, moving markers - see spec, "Leaflet-Karte".
@@ -206,6 +209,36 @@ public class MapPane extends StackPane {
      */
     void setOnSetPosition(BiConsumer<List<MediaFile>, LatLon> handler) {
         onSetPosition = Objects.requireNonNull(handler);
+    }
+
+    /**
+     * @param track a loaded track
+     * @param color CSS colour of its line
+     */
+    void showTrack(GpxTrack track, String color) {
+        final List<LatLon> points = new ArrayList<>();
+        for (TrackPoint point : track.points()) {
+            // GpxReader checks the format, not the range - such a point must not break the map
+            if (Math.abs(point.latitude()) <= 90 && Math.abs(point.longitude()) <= 180) {
+                points.add(new LatLon(point.latitude(), point.longitude()));
+            }
+        }
+        mapView.showTrack(track.id(), points, color);
+    }
+
+    /**
+     * @param track a track shown with showTrack()
+     * @param visible false hides it, true shows it again
+     */
+    void setTrackVisible(GpxTrack track, boolean visible) {
+        mapView.setTrackVisible(track.id(), visible);
+    }
+
+    /**
+     * @param track a track shown with showTrack()
+     */
+    void removeTrack(GpxTrack track) {
+        mapView.removeTrack(track.id());
     }
 
     // for the track list and the UI tests

@@ -20,6 +20,7 @@
 <?import tf.geotagger.main.DetailsPane?>
 <?import tf.geotagger.main.ImageInfoPane?>
 <?import tf.geotagger.main.MapPane?>
+<?import tf.geotagger.main.TrackListPane?>
 <?import tf.geotagger.main.PreviewPane?>
 
 <BorderPane xmlns="http://javafx.com/javafx" xmlns:fx="http://javafx.com/fxml" fx:controller="tf.geotagger.main.GeoTagger">
@@ -72,6 +73,7 @@
                         <ImageInfoPane fx:id="imageInfoPane"/>
                     </Tab>
                 </TabPane>
+                <TrackListPane fx:id="trackListPane"/>
             </SplitPane>
         </SplitPane>
     </center>

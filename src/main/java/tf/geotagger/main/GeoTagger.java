@@ -42,6 +42,7 @@ import java.util.Optional;
 import java.util.ResourceBundle;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.beans.value.ChangeListener;
@@ -163,6 +164,8 @@ public class GeoTagger implements Initializable {
     private ImageInfoPane imageInfoPane;
     @FXML
     private MapPane mapPane;
+    @FXML
+    private TrackListPane trackListPane;
 
     private final ObservableList<MediaFile> files = FXCollections.observableArrayList();
     private final FilteredList<MediaFile> filteredFiles = new FilteredList<>(files);
@@ -214,7 +217,8 @@ public class GeoTagger implements Initializable {
         final Double leftDivider = GeoTaggerPreferences.RECENT_LEFT_DIVIDER_POS.getAsType();
         leftSplit.setDividerPositions(leftDivider);
         final Double rightDivider = GeoTaggerPreferences.RECENT_RIGHT_DIVIDER_POS.getAsType();
-        rightSplit.setDividerPositions(rightDivider);
+        final Double rightLowerDivider = GeoTaggerPreferences.RECENT_RIGHT_LOWER_DIVIDER_POS.getAsType();
+        rightSplit.setDividerPositions(rightDivider, rightLowerDivider);
         TableViewPreferences.loadTableViewPreferences(mediaTable, TABLE_PREFERENCES, GeoTaggerPreferences.INSTANCE);
 
         // like GPXEditor - text fields handle ctrl+z themselves, the rest of the window gets undo / redo
@@ -256,11 +260,13 @@ public class GeoTagger implements Initializable {
         GeoTaggerPreferences.RECENT_CENTRAL_DIVIDER_POS.put(centralSplit.getDividerPositions()[0]);
         GeoTaggerPreferences.RECENT_LEFT_DIVIDER_POS.put(leftSplit.getDividerPositions()[0]);
         GeoTaggerPreferences.RECENT_RIGHT_DIVIDER_POS.put(rightSplit.getDividerPositions()[0]);
+        GeoTaggerPreferences.RECENT_RIGHT_LOWER_DIVIDER_POS.put(rightSplit.getDividerPositions()[1]);
         GeoTaggerPreferences.INCLUDE_SUBFOLDERS.put(includeSubfoldersCheck.isSelected());
         TableViewPreferences.saveTableViewPreferences(mediaTable, TABLE_PREFERENCES, GeoTaggerPreferences.INSTANCE);
         DoUndoManager.getInstance().changeCountProperty().removeListener(undoListener);
         worker.shutdownNow();
         previewPane.dispose();
+        trackListPane.dispose();
         mapPane.dispose();
         imageInfoPane.dispose();
         closeExifTool();
@@ -378,6 +384,7 @@ public class GeoTagger implements Initializable {
             mediaTable.scrollTo(index);
         });
         mapPane.setOnFileMoved((file, position) -> setPosition(List.of(file), position, "Set position"));
+        trackListPane.setMap(mapPane);
         mapPane.setSelectionSupplier(this::selectedFiles);
         mapPane.setOnSetPosition((selected, position) -> setPosition(selected, position, "Set position"));
         // drag the selected files onto the map
@@ -618,11 +625,15 @@ public class GeoTagger implements Initializable {
     // UI tests load folders this way instead of through the native folder dialog
     void loadFolder(Path newFolder, boolean includeSubfolders) {
         final MetadataReader folderReader = reader;
+        // found in the background, shown in the track list when loading succeeded
+        final AtomicReference<List<Path>> gpxFiles = new AtomicReference<>(List.of());
         final Task<List<MediaFile>> task = new Task<>() {
             @Override
             protected List<MediaFile> call() throws IOException {
                 updateMessage("Searching " + newFolder + " ...");
-                final List<Path> mediaFiles = FolderScanner.scan(newFolder, includeSubfolders).mediaFiles();
+                final FolderScanner.ScanResult scan = FolderScanner.scan(newFolder, includeSubfolders);
+                gpxFiles.set(scan.gpxFiles());
+                final List<Path> mediaFiles = scan.mediaFiles();
                 final int total = mediaFiles.size();
                 updateProgress(0, total);
                 return folderReader.read(mediaFiles, done -> {
@@ -640,6 +651,7 @@ public class GeoTagger implements Initializable {
             files.setAll(task.getValue());
             refreshFiles();
             mapPane.fitToFiles(files);
+            trackListPane.setTracks(gpxFiles.get());
             stage.setTitle(GeoTaggerManager.TITLE + " - " + newFolder);
             statusLabel.setText(files.size() + " files in " + newFolder);
             GeoTaggerPreferences.getRecentFolders().addRecentFile(newFolder.toString());

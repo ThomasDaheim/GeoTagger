@@ -52,7 +52,10 @@ public enum GeoTaggerPreferences implements IPreferencesStore {
     // left side vs. map / details
     RECENT_CENTRAL_DIVIDER_POS("recentCentralDividerPos", Double.toString(0.5), Double.class),
     // map vs. details / image info
-    RECENT_RIGHT_DIVIDER_POS("recentRightDividerPos", Double.toString(0.5), Double.class),
+    // defaults: all fields of the details visible in the default window size, a few rows for the tracks
+    RECENT_RIGHT_DIVIDER_POS("recentRightDividerPos", Double.toString(0.4), Double.class),
+    // details / image info vs. track list
+    RECENT_RIGHT_LOWER_DIVIDER_POS("recentRightLowerDividerPos", Double.toString(0.88), Double.class),
 
     EXIFTOOL_PATH("exifToolPath", "", String.class),
     RECENT_FOLDER("recentFolder", System.getProperty("user.home"), String.class),
