@@ -169,6 +169,8 @@ public class GeoTagger implements Initializable {
     private Path folder;
     // volatile: UI tests wait for it from their own thread
     private volatile boolean busy = false;
+    // true while refreshFiles() restores the selection - the selection listeners ignore that
+    private boolean restoringSelection = false;
     private ExifTool exifTool;
     private MetadataReader reader;
     private MetadataWriter writer;
@@ -284,7 +286,11 @@ public class GeoTagger implements Initializable {
     }
 
     private void initPreview() {
-        mediaTable.getSelectionModel().selectedItemProperty().addListener((observable, oldFile, newFile) -> showPreview(newFile));
+        mediaTable.getSelectionModel().selectedItemProperty().addListener((observable, oldFile, newFile) -> {
+            if (!restoringSelection) {
+                showPreview(newFile);
+            }
+        });
         previewPane.getFirstButton().setOnAction(event -> select(0));
         previewPane.getPreviousButton().setOnAction(event -> select(mediaTable.getSelectionModel().getSelectedIndex() - 1));
         previewPane.getNextButton().setOnAction(event -> select(mediaTable.getSelectionModel().getSelectedIndex() + 1));
@@ -309,7 +315,11 @@ public class GeoTagger implements Initializable {
     }
 
     private void initDetails() {
-        mediaTable.getSelectionModel().getSelectedItems().addListener((ListChangeListener<MediaFile>) change -> selectionChanged());
+        mediaTable.getSelectionModel().getSelectedItems().addListener((ListChangeListener<MediaFile>) change -> {
+            if (!restoringSelection) {
+                selectionChanged();
+            }
+        });
         imageInfoTab.setOnSelectionChanged(event -> showImageInfo());
         detailsPane.setOnEdit((field, value) -> perform(ChangeFieldsAction.sameValue(
                 "Set " + DetailsPane.label(field).toLowerCase(Locale.ROOT), selectedFiles(), field, value)));
@@ -373,21 +383,30 @@ public class GeoTagger implements Initializable {
         final List<MediaFile> selected = selectedFiles();
         final MediaFile focused = selection.getSelectedItem();
 
-        final Predicate<? super MediaFile> predicate = filteredFiles.getPredicate();
-        filteredFiles.setPredicate(null);
-        filteredFiles.setPredicate(predicate);
+        // the selection only flickers here - preview and image info must not clear and load the same file again
+        restoringSelection = true;
+        try {
+            final Predicate<? super MediaFile> predicate = filteredFiles.getPredicate();
+            filteredFiles.setPredicate(null);
+            filteredFiles.setPredicate(predicate);
 
-        final List<MediaFile> items = mediaTable.getItems();
-        selection.clearSelection();
-        for (MediaFile file : selected) {
-            if (file != focused && items.contains(file)) {
-                selection.select(file);
+            final List<MediaFile> items = mediaTable.getItems();
+            selection.clearSelection();
+            for (MediaFile file : selected) {
+                if (file != focused && items.contains(file)) {
+                    selection.select(file);
+                }
             }
+            // select the focused file last - it stays the one shown in preview and image info
+            if (focused != null && items.contains(focused)) {
+                selection.select(focused);
+            }
+        } finally {
+            restoringSelection = false;
         }
-        // select the focused file last - it stays the one shown in preview and image info
-        if (focused != null && items.contains(focused)) {
-            selection.select(focused);
-        }
+        // same file: nothing happens, a file gone from the filtered list: cleared
+        showPreview(selection.getSelectedItem());
+        showImageInfo();
 
         mediaTable.refresh();
         updateFilterCounts();
@@ -402,7 +421,8 @@ public class GeoTagger implements Initializable {
     private void updateButtons() {
         final long changed = files.stream().filter(MediaFile::isChanged).count();
         saveButton.setText(changed == 0 ? "Save" : "Save (" + changed + ")");
-        saveButton.setDisable(busy || changed == 0);
+        // without a usable ExifTool nothing can be written - the changes stay pending
+        saveButton.setDisable(busy || changed == 0 || writer == null);
         undoButton.setDisable(busy || folder == null || !DoUndoManager.getInstance().canUndo(undoKey()));
         redoButton.setDisable(busy || folder == null || !DoUndoManager.getInstance().canDo(undoKey()));
     }
@@ -423,7 +443,8 @@ public class GeoTagger implements Initializable {
      *
      * @return true if ExifTool is usable - otherwise no folder can be opened
      */
-    private boolean applyExifTool() {
+    // package private: UI tests switch to an unusable ExifTool this way, without the preferences dialog
+    boolean applyExifTool() {
         closeExifTool();
         final String configured = GeoTaggerPreferences.EXIFTOOL_PATH.getAsString();
         try {
@@ -437,12 +458,14 @@ public class GeoTagger implements Initializable {
             imageInfoPane.setExifTool(exifTool);
             openFolderButton.setDisable(false);
             statusLabel.setText("ExifTool " + version + " - " + executable);
+            updateButtons();
             return true;
         } catch (ExifToolException | InvalidPathException ex) {
             previewPane.setPreviewProvider(null);
             imageInfoPane.setExifTool(null);
             openFolderButton.setDisable(true);
             statusLabel.setText("ExifTool not usable - please check the preferences");
+            updateButtons();
             return false;
         }
     }
@@ -554,10 +577,16 @@ public class GeoTagger implements Initializable {
      */
     private void saveChanges(Runnable afterSuccess) {
         final List<MediaFile> changed = files.stream().filter(MediaFile::isChanged).toList();
-        if (changed.isEmpty() || writer == null) {
+        if (changed.isEmpty()) {
             if (afterSuccess != null) {
                 afterSuccess.run();
             }
+            return;
+        }
+        if (writer == null) {
+            // "Save" was chosen - closing or switching the folder now would silently lose the changes
+            ShowAlerts.getInstance().showAlert(Alert.AlertType.ERROR, GeoTaggerManager.TITLE, "Nothing saved",
+                    "ExifTool isn't usable - please check the preferences. Your changes are kept.");
             return;
         }
         final MetadataWriter fileWriter = writer;

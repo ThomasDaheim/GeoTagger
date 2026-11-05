@@ -30,10 +30,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
+import javafx.scene.image.ImageView;
 import javafx.scene.input.KeyCode;
 import javafx.stage.Stage;
 import org.junit.jupiter.api.BeforeAll;
@@ -198,5 +201,38 @@ class GeoTaggerEditUiTest {
         }
         assertTrue(Files.exists(dir.resolve("a.jpg_original")));
         assertEquals("✓", placeStatus(table(robot), file));
+    }
+
+    @Test
+    void saveIsImpossibleWithoutExifTool(FxRobot robot) throws TimeoutException {
+        loadTwoImages(robot);
+        select(robot, "a.jpg");
+        enter(robot, Field.CITY, "Bozen");
+
+        // e.g. a wrong path confirmed in the preferences - the changes must not look saveable
+        GeoTaggerPreferences.EXIFTOOL_PATH.put(dir.resolve("missing.exe").toString());
+        robot.interact(() -> controller.applyExifTool());
+
+        assertTrue(robot.lookup("#saveButton").queryButton().isDisabled());
+    }
+
+    @Test
+    void editingKeepsThePreview(FxRobot robot) throws TimeoutException {
+        loadTwoImages(robot);
+        select(robot, "a.jpg");
+        final ImageView preview = robot.lookup("#previewPane .image-view").queryAs(ImageView.class);
+        WaitForAsyncUtils.waitFor(10, TimeUnit.SECONDS, () -> preview.getImage() != null);
+        // the preview of the same file must not be cleared and loaded again after each edit
+        final AtomicBoolean cleared = new AtomicBoolean(false);
+        robot.interact(() -> preview.imageProperty().addListener((observable, oldImage, newImage) -> {
+            if (newImage == null) {
+                cleared.set(true);
+            }
+        }));
+
+        enter(robot, Field.CITY, "Bozen");
+
+        assertEquals("Bozen", fileNamed(table(robot), "a.jpg").value(Field.CITY));
+        assertFalse(cleared.get());
     }
 }
