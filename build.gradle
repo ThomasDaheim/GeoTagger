@@ -10,12 +10,14 @@
 //     PATH - without it they are skipped
 //
 // Main tasks
-//   gradlew build -> compile + test
-//   gradlew run   -> start GeoTagger
+//   gradlew build  -> compile + test
+//   gradlew run    -> start GeoTagger
+//   gradlew uiTest -> UI tests (TestFX) - opens windows, keep hands off mouse and keyboard
 //
 // How JavaFX is wired - same approach as GPXEditor (GeoTagger is non-modular, i.e. runs from the classpath)
-//   - compile / test: JavaFX jars on the classpath are sufficient (tests don't start the JavaFX toolkit)
-//   - run: the JavaFX jars of the current platform are put on the module path, all other jars stay on the classpath
+//   - compile: JavaFX jars on the classpath are sufficient
+//   - run / test / uiTest: the JavaFX jars of the current platform are put on the module path, all other jars stay on
+//     the classpath
 //   - start scripts (installDist) and jpackage follow later, once there is something to install
 // =====================================================================================================================
 
@@ -78,6 +80,11 @@ dependencies {
     testImplementation platform('org.junit:junit-bom:5.13.0')
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testImplementation 'org.junit.jupiter:junit-jupiter-params'
+    // test collections (NonUITests / UITests) - same approach as GPXEditor
+    testImplementation 'org.junit.platform:junit-platform-suite'
+    // UI tests - TestFX needs hamcrest to compile lookup(...) calls
+    testImplementation 'org.testfx:testfx-junit5:4.0.18'
+    testImplementation 'org.hamcrest:hamcrest:3.0'
     // Gradle 9 doesn't provide the launcher automatically anymore
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
@@ -85,12 +92,6 @@ dependencies {
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
     options.compilerArgs += ['-Xlint:unchecked', '-Xlint:deprecation']
-}
-
-tasks.named('test', Test) {
-    useJUnitPlatform()
-    systemProperty 'java.awt.headless', 'true'
-    testLogging.showStandardStreams = true
 }
 
 // JavaFX needs to be on the module path at runtime - only the platform specific jars
@@ -140,4 +141,47 @@ application {
 tasks.named('run', JavaExec) {
     jvmArgumentProviders.add(objects.newInstance(ModulePathArgumentProvider).tap { modulePath.from(javafxJars) })
     enableAssertions = true
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Tests - see docs/superpowers/plans/2026-11-05-plan-ui-test-geruest.md
+//   gradlew test                      -> all tests without @Tag("UI") - fast, no windows
+//   gradlew uiTest                    -> only @Tag("UI") - opens windows, the robot moves the mouse: hands off!
+//   gradlew test --tests <class>      -> exactly that class or suite (e.g. from NetBeans), UI tests included
+//   suites for NetBeans: tf.geotagger.testsuites.NonUITests / UITests
+// ---------------------------------------------------------------------------------------------------------------------
+// with --tests (a single class or suite) everything selected runs; without it the UI tests and the suites are left out
+// - otherwise the suites would run all tests a second time
+def testsFiltered = gradle.startParameter.taskRequests.any { it.args.contains('--tests') }
+// TestFX reads the application parameters via JavaFX internals
+def testJvmFlags = jvmFlags + ['--add-opens', 'javafx.graphics/com.sun.javafx.application=ALL-UNNAMED']
+
+tasks.withType(Test).configureEach {
+    jvmArgumentProviders.add(objects.newInstance(ModulePathArgumentProvider).tap { modulePath.from(javafxJars) })
+    jvmArgs(testJvmFlags)
+    // tests use their own preferences node - the real settings of GeoTagger stay untouched
+    systemProperty 'geotagger.preferences', 'tf/geotagger/test'
+    // TestFX moves the mouse with the AWT robot
+    systemProperty 'java.awt.headless', 'false'
+    testLogging.showStandardStreams = true
+}
+
+tasks.named('test', Test) {
+    useJUnitPlatform {
+        if (!testsFiltered) {
+            excludeTags 'UI'
+            excludeEngines 'junit-platform-suite'
+        }
+    }
+}
+
+tasks.register('uiTest', Test) {
+    description = 'Runs the UI tests - opens windows, keep hands off mouse and keyboard.'
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform {
+        includeTags 'UI'
+        excludeEngines 'junit-platform-suite'
+    }
 }
