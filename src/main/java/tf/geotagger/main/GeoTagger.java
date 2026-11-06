@@ -406,6 +406,8 @@ public class GeoTagger implements Initializable {
             // all at once: one change for the listeners - not a refresh and a pan to a single file per file
             if (indices.length > 0) {
                 selection.selectIndices(indices[0], Arrays.copyOfRange(indices, 1, indices.length));
+                // the list shows the first of them
+                mediaTable.scrollTo(indices[0]);
             }
         });
         // drag the selected files onto the map

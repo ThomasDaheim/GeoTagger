@@ -158,6 +158,8 @@ class GeoTaggerEditUiTest {
             assertTrue(button.getGraphic() instanceof ImageView view && view.getImage() != null && !view.getImage().isError(), id);
             assertTrue(button.getTooltip() != null
                     && button.getTooltip().getText().startsWith("#undoButton".equals(id) ? "Undo" : "Redo"), id);
+            // JavaFX waits a second by default - too long (user feedback)
+            assertTrue(button.getTooltip().getShowDelay().toMillis() <= 300, id);
         }
     }
 

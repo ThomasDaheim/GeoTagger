@@ -47,6 +47,7 @@ import javafx.scene.control.Tooltip;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
+import javafx.util.Duration;
 import tf.geotagger.track.GpxReader;
 import tf.geotagger.track.GpxTrack;
 import tf.geotagger.track.GpxContent;
@@ -251,8 +252,15 @@ public class TrackListPane extends VBox {
             final boolean failed = track.state() == GpxTrack.State.FAILED;
             setText(track.file().getFileName() + (failed ? " (unreadable)" : ""));
             setStyle(failed ? "-fx-text-fill: red;" : "");
-            setTooltip(failed ? new Tooltip(track.failure()) : null);
+            setTooltip(failed ? errorTooltip(track.failure()) : null);
             setGraphic(check);
+        }
+
+        // JavaFX waits a second by default - too long
+        private static Tooltip errorTooltip(String text) {
+            final Tooltip tooltip = new Tooltip(text);
+            tooltip.setShowDelay(Duration.millis(300));
+            return tooltip;
         }
     }
 }

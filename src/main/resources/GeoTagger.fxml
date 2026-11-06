@@ -36,11 +36,11 @@
             <!-- icons from GPXEditor -->
             <Button fx:id="undoButton" onAction="#undo" disable="true">
                 <graphic><ImageView><Image url="@/undo.png"/></ImageView></graphic>
-                <tooltip><Tooltip text="Undo (Ctrl+Z)"/></tooltip>
+                <tooltip><Tooltip text="Undo (Ctrl+Z)" showDelay="300ms"/></tooltip>
             </Button>
             <Button fx:id="redoButton" onAction="#redo" disable="true">
                 <graphic><ImageView><Image url="@/redo.png"/></ImageView></graphic>
-                <tooltip><Tooltip text="Redo (Ctrl+Y)"/></tooltip>
+                <tooltip><Tooltip text="Redo (Ctrl+Y)" showDelay="300ms"/></tooltip>
             </Button>
             <Separator orientation="VERTICAL"/>
             <Button fx:id="preferencesButton" text="Preferences..." onAction="#showPreferences"/>

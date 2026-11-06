@@ -266,6 +266,34 @@ class GeoTaggerMapUiTest {
     }
 
     @Test
+    void areaSelectionScrollsTheListToTheSelectedFiles(FxRobot robot) throws TimeoutException {
+        for (int i = 0; i < 80; i++) {
+            TestFiles.image(dir, String.format("img%03d.jpg", i));
+        }
+        // only the last two files have coordinates
+        try (ExifTool tool = new ExifTool(exifTool)) {
+            for (String name : List.of("img078.jpg", "img079.jpg")) {
+                tool.execute(List.of("-overwrite_original", "-GPS:GPSLatitude#=46.5", "-GPS:GPSLatitudeRef#=N",
+                        "-GPS:GPSLongitude#=11.5", "-GPS:GPSLongitudeRef#=E", dir.resolve(name).toString()));
+            }
+        }
+        robot.interact(() -> controller.loadFolder(dir, false));
+        UiTestSupport.waitUntilIdle(controller);
+        UiTestSupport.waitUntilMapReady(controller);
+        js(robot, "myMap.setView([46.5, 11.5], 12, {animate: false})");
+
+        // small enough to stay inside the map (about 330 px high in the default window)
+        robot.press(KeyCode.CONTROL).moveTo(point(robot, 46.48, 11.48)).press(MouseButton.PRIMARY)
+                .moveTo(point(robot, 46.52, 11.52)).release(MouseButton.PRIMARY).release(KeyCode.CONTROL);
+        WaitForAsyncUtils.waitForFxEvents();
+
+        assertEquals(2, table(robot).getSelectionModel().getSelectedItems().size());
+        final VirtualFlow<?> flow = robot.lookup("#mediaTable .virtual-flow").queryAs(VirtualFlow.class);
+        assertTrue(flow.getFirstVisibleCell().getIndex() <= 78 && flow.getLastVisibleCell().getIndex() >= 78,
+                "visible rows: " + flow.getFirstVisibleCell().getIndex() + " - " + flow.getLastVisibleCell().getIndex());
+    }
+
+    @Test
     void draggingTheScrollBarStillScrolls(FxRobot robot) throws TimeoutException {
         for (int i = 0; i < 80; i++) {
             TestFiles.image(dir, String.format("img%03d.jpg", i));
