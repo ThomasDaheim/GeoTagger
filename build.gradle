@@ -167,6 +167,31 @@ tasks.named('run', JavaExec) {
     enableAssertions = true
 }
 
+// start scripts (gradlew installDist -> build/install/GeoTagger/bin) - starting without Gradle is about 3 s faster
+// they need the javafx jars on the module path - injected with the script's own APP_HOME, same as GPXEditor:
+//   windows: DEFAULT_JVM_OPTS gets "--module-path=..." and "--upgrade-module-path=..."; CLASSPATH becomes
+//            "<own jar>;lib\*" - the list of all jars is too long for the windows command line
+//   unix:    both options are added to the final exec line (DEFAULT_JVM_OPTS doesn't expand $APP_HOME there)
+startScripts {
+    def ownJar = tasks.named('jar').flatMap { it.archiveFileName }
+    def fxJarNames = javafxJars.elements.map { files -> files.collect { it.asFile.name } }
+    def jsobjectJarNames = jsobjectJar.elements.map { files -> files.collect { it.asFile.name } }
+    doLast {
+        def windowsModulePath = fxJarNames.get().collect { "%APP_HOME%\\lib\\${it}" }.join(';')
+        def unixModulePath = fxJarNames.get().collect { '$APP_HOME/lib/' + it }.join(':')
+        def windowsUpgradePath = jsobjectJarNames.get().collect { "%APP_HOME%\\lib\\${it}" }.join(';')
+        def unixUpgradePath = jsobjectJarNames.get().collect { '$APP_HOME/lib/' + it }.join(':')
+        windowsScript.text = windowsScript.text.replace('set DEFAULT_JVM_OPTS=', "set DEFAULT_JVM_OPTS=\"--module-path=${windowsModulePath}\" \"--upgrade-module-path=${windowsUpgradePath}\" ")
+        windowsScript.text = windowsScript.text.replaceFirst(/(?m)^set CLASSPATH=.*$/, java.util.regex.Matcher.quoteReplacement("set CLASSPATH=%APP_HOME%\\lib\\${ownJar.get()};%APP_HOME%\\lib\\*"))
+        unixScript.text = unixScript.text.replace('\nexec "$JAVACMD" "$@"', "\nexec \"\$JAVACMD\" --module-path=\"${unixModulePath}\" --upgrade-module-path=\"${unixUpgradePath}\" \"\$@\"")
+    }
+}
+
+// after each build the runnable distribution under build/install/GeoTagger is up to date - same as GPXEditor
+tasks.named('build') {
+    finalizedBy 'installDist'
+}
+
 // ---------------------------------------------------------------------------------------------------------------------
 // Tests - see docs/superpowers/plans/2026-11-05-plan-ui-test-geruest.md
 //   gradlew test                      -> all tests without @Tag("UI") - fast, no windows

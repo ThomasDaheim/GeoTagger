@@ -44,6 +44,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
+import javafx.application.Platform;
 import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.beans.value.ChangeListener;
 import javafx.collections.FXCollections;
@@ -251,6 +252,8 @@ public class GeoTagger implements Initializable {
             }
         });
         initExifTool();
+        // the map takes about two seconds - the window is already shown meanwhile
+        Platform.runLater(mapPane::start);
     }
 
     /**

@@ -25,12 +25,14 @@
  */
 package tf.geotagger.main;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -46,6 +48,7 @@ import tf.geo.LatLon;
 import tf.geo.map.LeafletMapView;
 import tf.geo.map.MapConfig;
 import tf.geo.map.MapListener;
+import tf.geo.map.MapMarker;
 import tf.geo.map.TrackLine;
 import tf.geotagger.model.MediaFile;
 import tf.geotagger.track.GpxTrack;
@@ -61,7 +64,10 @@ public class MapPane extends StackPane {
 
     private static final Logger LOGGER = Logger.getLogger(MapPane.class.getName());
 
-    private final LeafletMapView mapView = new LeafletMapView();
+    // created in start() - the WebView takes about two seconds, the window shall appear without waiting for it
+    private LeafletMapView mapView;
+    // calls before start(), executed there in order
+    private final List<Consumer<LeafletMapView>> pending = new ArrayList<>();
     // files of the markers shown last - the map reports marker ids
     private final Map<String, MediaFile> filesById = new HashMap<>();
     private final ContextMenu contextMenu = new ContextMenu();
@@ -75,6 +81,17 @@ public class MapPane extends StackPane {
     private BiConsumer<List<MediaFile>, Boolean> onAreaSelected = (files, shiftDown) -> { };
 
     public MapPane() {
+        // the map follows in start()
+    }
+
+    /**
+     * Creates the map - called once the window is shown. Calls made before are executed now.
+     */
+    void start() {
+        if (mapView != null) {
+            return;
+        }
+        mapView = new LeafletMapView();
         getChildren().add(mapView);
         initContextMenu();
         initDrop();
@@ -107,6 +124,18 @@ public class MapPane extends StackPane {
             LOGGER.log(Level.SEVERE, "Map can't be shown", ex);
             return null;
         });
+        final List<Consumer<LeafletMapView>> calls = new ArrayList<>(pending);
+        pending.clear();
+        calls.forEach(call -> call.accept(mapView));
+    }
+
+    // now or once the map exists - LeafletMapView itself keeps calls until its page is loaded
+    private void withMap(Consumer<LeafletMapView> call) {
+        if (mapView != null) {
+            call.accept(mapView);
+        } else {
+            pending.add(call);
+        }
     }
 
     private static boolean isInside(LatLon position, LatLon southWest, LatLon northEast) {
@@ -163,7 +192,7 @@ public class MapPane extends StackPane {
      */
     boolean dropSelectionAt(double x, double y) {
         final List<MediaFile> files = selection.get();
-        final LatLon position = mapView.latLonAt(x, y).orElse(null);
+        final LatLon position = mapView == null ? null : mapView.latLonAt(x, y).orElse(null);
         if (position == null || files.isEmpty()) {
             return false;
         }
@@ -172,10 +201,10 @@ public class MapPane extends StackPane {
     }
 
     /**
-     * @return true once the map page is loaded
+     * @return true once the map is created and its page is loaded
      */
     boolean isReady() {
-        return mapView.isReady();
+        return mapView != null && mapView.isReady();
     }
 
     /**
@@ -187,21 +216,23 @@ public class MapPane extends StackPane {
     void showFiles(List<MediaFile> files, List<MediaFile> selected) {
         filesById.clear();
         files.forEach(file -> filesById.put(MapMarkers.id(file), file));
-        mapView.showMarkers(MapMarkers.of(files, selected));
+        final List<MapMarker> markers = MapMarkers.of(files, selected);
+        withMap(view -> view.showMarkers(markers));
     }
 
     /**
      * @param files files to show - those without coordinates are ignored
      */
     void fitToFiles(List<MediaFile> files) {
-        mapView.fitBounds(files.stream().map(MapMarkers::position).flatMap(Optional::stream).toList());
+        final List<LatLon> positions = files.stream().map(MapMarkers::position).flatMap(Optional::stream).toList();
+        withMap(view -> view.fitBounds(positions));
     }
 
     /**
      * @param file file to center on - nothing happens without coordinates
      */
     void panToFile(MediaFile file) {
-        MapMarkers.position(file).ifPresent(mapView::panTo);
+        MapMarkers.position(file).ifPresent(position -> withMap(view -> view.panTo(position)));
     }
 
     /**
@@ -246,9 +277,10 @@ public class MapPane extends StackPane {
      * @param fallbackColor CSS colour for segments without colour in the file
      */
     void showTrack(GpxTrack track, String fallbackColor) {
-        mapView.showTrack(track.id(), track.lines().stream()
+        final List<TrackLine> lines = track.lines().stream()
                 .map(line -> new TrackLine(line.points(), line.color() != null ? line.color() : fallbackColor))
-                .toList());
+                .toList();
+        withMap(view -> view.showTrack(track.id(), lines));
     }
 
     /**
@@ -256,17 +288,17 @@ public class MapPane extends StackPane {
      * @param visible false hides it, true shows it again
      */
     void setTrackVisible(GpxTrack track, boolean visible) {
-        mapView.setTrackVisible(track.id(), visible);
+        withMap(view -> view.setTrackVisible(track.id(), visible));
     }
 
     /**
      * @param track a track shown with showTrack()
      */
     void removeTrack(GpxTrack track) {
-        mapView.removeTrack(track.id());
+        withMap(view -> view.removeTrack(track.id()));
     }
 
-    // for the track list and the UI tests
+    // for the UI tests - null before start()
     LeafletMapView mapView() {
         return mapView;
     }
@@ -275,6 +307,9 @@ public class MapPane extends StackPane {
      * Unloads the map - called when GeoTagger ends.
      */
     void dispose() {
-        mapView.dispose();
+        pending.clear();
+        if (mapView != null) {
+            mapView.dispose();
+        }
     }
 }

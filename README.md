@@ -35,8 +35,8 @@ Planned next: geo services (reverse geocoding, altitude, time zone) and the trac
 * Note on saving: changes are collected and written only on "Save". ExifTool keeps the original as `*_original`; the saved file gets the file timestamps of the original. Files changed outside GeoTagger since loading are skipped and keep their changes.
 * Note on formats: JPEG, TIFF, PNG, HEIC, RAW (CR2, CR3, NEF, ARW, DNG, ...) and videos (MOV, MP4, M4V) are written directly. For AVI and MTS an XMP sidecar `<name>.xmp` is written instead.
 * Note on ExifTool: GeoTagger looks for ExifTool on the PATH at the first start; otherwise select the executable under "Preferences...".
-* Note on building: GeoTagger needs [JavaHelper](https://github.com/ThomasDaheim/JavaHelper) and [ExifToolHelper](https://github.com/ThomasDaheim/ExifToolHelper) in the local maven repo - run "gradlew build" in those projects first. Requires JDK 25; Gradle comes via the wrapper.
-* Note on running: "gradlew run" starts GeoTagger with JavaFX on the module path (see build.gradle).
+* Note on building: GeoTagger needs [JavaHelper](https://github.com/ThomasDaheim/JavaHelper), [ExifToolHelper](https://github.com/ThomasDaheim/ExifToolHelper) and [GeoHelper](https://github.com/ThomasDaheim/GeoHelper) in the local maven repo - run "gradlew build" in those projects first. Requires JDK 25; Gradle comes via the wrapper.
+* Note on running: "gradlew build" (or "gradlew installDist") creates start scripts - start `build\install\GeoTagger\bin\GeoTagger.bat`, about 3 s faster than "gradlew run". Both put JavaFX on the module path (see build.gradle).
 * Note on tests:
   * "gradlew test" runs all tests without UI. Tests that need ExifTool look for it in the environment variable EXIFTOOL_PATH and then on the PATH - without it they are skipped.
   * "gradlew uiTest" runs the UI tests (TestFX). They open windows and move the mouse - keep your hands off mouse and keyboard meanwhile.
