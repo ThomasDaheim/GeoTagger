@@ -26,11 +26,10 @@
 package tf.geotagger.main;
 
 import java.util.EnumMap;
-import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.function.BiConsumer;
+import javafx.beans.property.BooleanProperty;
+import javafx.beans.property.SimpleBooleanProperty;
 import javafx.geometry.Bounds;
 import javafx.geometry.Insets;
 import javafx.scene.control.Label;
@@ -47,8 +46,8 @@ import tf.geotagger.model.Field;
 import tf.geotagger.model.MediaFile;
 
 /**
- * Editable fields of the selected files - see spec, section "Hauptfenster", tab "Details".
- * A change is reported when the user presses Enter or leaves the field; invalid input is marked red and not reported.
+ * Editable fields of the selected files, shown in the edit dialog - see spec, section "Hauptfenster".
+ * Each keystroke is checked: invalid input is marked red and makes {@link #validProperty()} false.
  */
 public class DetailsPane extends GridPane {
     private static final Map<Field, String> LABELS = new EnumMap<>(Map.of(
@@ -75,13 +74,15 @@ public class DetailsPane extends GridPane {
             Field.TIME_OFFSET, 7));
 
     private final Map<Field, TextField> textFields = new EnumMap<>(Field.class);
-    // text shown for the current selection - leaving a field with this text changes nothing
+    // text shown for the files - a field still showing it is no change
     private final Map<Field, String> shownTexts = new EnumMap<>(Field.class);
-    private BiConsumer<Field, Object> onEdit = (field, value) -> {};
-    // files shown at the moment - invalid input survives a refresh for the same files
-    private List<MediaFile> shownFiles = List.of();
-    private final Set<Field> invalidFields = EnumSet.noneOf(Field.class);
+    // checked with each keystroke
+    private final Map<Field, String> errors = new EnumMap<>(Field.class);
+    private final BooleanProperty valid = new SimpleBooleanProperty(true);
 
+    /**
+     * Creates the fields - empty and disabled until {@link #setFiles(List)} is called.
+     */
     public DetailsPane() {
         setHgap(8);
         setVgap(6);
@@ -99,12 +100,12 @@ public class DetailsPane extends GridPane {
             // not wider than the values need
             text.setPrefColumnCount(COLUMNS.get(field));
             text.setMaxWidth(Region.USE_PREF_SIZE);
-            // the error message pops up right away - typing on hides it, the red border stays until the input is valid
-            text.textProperty().addListener((observable, oldText, newText) -> hideErrorMessage(text));
-            text.setOnAction(event -> commit(field));
+            // red border with each keystroke - the message pops up on Enter or when leaving the field, typing on hides it
+            text.textProperty().addListener((observable, oldText, newText) -> check(field));
+            text.setOnAction(event -> showErrorMessage(field));
             text.focusedProperty().addListener((observable, wasFocused, focused) -> {
                 if (!focused) {
-                    commit(field);
+                    showErrorMessage(field);
                 }
             });
             textFields.put(field, text);
@@ -116,29 +117,11 @@ public class DetailsPane extends GridPane {
     }
 
     /**
-     * @param field a field
-     * @return its label in the details
-     */
-    public static String label(Field field) {
-        return LABELS.get(field);
-    }
-
-    /**
-     * @param onEdit called with the field and its new value (null = delete) when the user changed a field
-     */
-    public void setOnEdit(BiConsumer<Field, Object> onEdit) {
-        this.onEdit = onEdit;
-    }
-
-    /**
-     * Shows the values of the selected files - fields with different values stay empty and show "(different)".
+     * Shows the values of the files - fields with different values stay empty and show "(different)".
      *
-     * @param files selected files - none disables all fields
+     * @param files files to edit - none disables all fields
      */
     public void setFiles(List<MediaFile> files) {
-        // same files again (e.g. after another field was changed): invalid input stays for the user to correct it
-        final boolean sameFiles = files.equals(shownFiles);
-        shownFiles = List.copyOf(files);
         for (Field field : Field.values()) {
             final SelectionValue selection = SelectionValue.of(files, field);
             final String shown = FieldText.format(field, selection.value());
@@ -146,53 +129,70 @@ public class DetailsPane extends GridPane {
             final TextField text = textFields.get(field);
             text.setPromptText(selection.different() ? "(different)" : "");
             text.setDisable(files.isEmpty());
-            if (!sameFiles || !invalidFields.contains(field)) {
-                text.setText(shown);
-                clearError(field);
-            }
+            text.setText(shown);
+            // same text as before: no change event
+            check(field);
         }
     }
 
     /**
-     * Takes over what is typed in the fields but not yet confirmed with Enter or by leaving the field - e.g. before
-     * saving with ctrl+s.
+     * @return true as long as all fields are valid - false while one is marked red
      */
-    public void commitAll() {
+    public BooleanProperty validProperty() {
+        return valid;
+    }
+
+    /**
+     * The fields the user changed - an empty field showing "(different)" is no change.
+     *
+     * @return new value per changed and valid field, null means "delete the field"
+     */
+    public Map<Field, Object> changes() {
+        final Map<Field, Object> changes = new EnumMap<>(Field.class);
         for (Field field : Field.values()) {
-            commit(field);
+            final String text = textFields.get(field).getText();
+            if (!text.equals(shownTexts.get(field)) && !errors.containsKey(field)) {
+                changes.put(field, FieldText.parse(field, text));
+            }
         }
+        return changes;
     }
 
-    private void commit(Field field) {
+    private void check(Field field) {
         final TextField text = textFields.get(field);
-        if (text.getText().equals(shownTexts.get(field))) {
-            clearError(field);
-            return;
+        hideErrorMessage(text);
+        String error = null;
+        if (!text.getText().equals(shownTexts.get(field))) {
+            try {
+                FieldText.parse(field, text.getText());
+            } catch (IllegalArgumentException ex) {
+                error = ex.getMessage();
+            }
         }
-        try {
-            final Object value = FieldText.parse(field, text.getText());
-            clearError(field);
-            // Enter and leaving the field would report the same change twice
-            shownTexts.put(field, text.getText());
-            onEdit.accept(field, value);
-        } catch (IllegalArgumentException ex) {
-            showError(field, ex.getMessage());
+        if (error == null) {
+            errors.remove(field);
+            text.setStyle("");
+            text.setTooltip(null);
+        } else {
+            errors.put(field, error);
+            text.setStyle(ERROR_STYLE);
+            final Tooltip tooltip = new Tooltip(error);
+            // when hovering later on: no long wait
+            tooltip.setShowDelay(Duration.millis(200));
+            text.setTooltip(tooltip);
         }
+        valid.set(errors.isEmpty());
     }
 
-    private void showError(Field field, String message) {
+    // the message of an invalid field, right away and left aligned below the field
+    private void showErrorMessage(Field field) {
         final TextField text = textFields.get(field);
-        invalidFields.add(field);
-        text.setStyle(ERROR_STYLE);
-        final Tooltip tooltip = new Tooltip(message);
-        // when hovering later on: no long wait
-        tooltip.setShowDelay(Duration.millis(200));
-        text.setTooltip(tooltip);
-        // right away, left aligned below the field
         final Bounds bounds = text.localToScreen(text.getBoundsInLocal());
-        if (bounds != null) {
-            tooltip.setAutoHide(true);
-            tooltip.show(text, bounds.getMinX(), bounds.getMaxY());
+        if (text.getTooltip() != null && bounds != null && text.getScene() != null) {
+            text.getTooltip().setAutoHide(true);
+            // a click e.g. on Cancel hides the message and still reaches the button
+            text.getTooltip().setConsumeAutoHidingEvents(false);
+            text.getTooltip().show(text, bounds.getMinX(), bounds.getMaxY());
         }
     }
 
@@ -200,13 +200,5 @@ public class DetailsPane extends GridPane {
         if (text.getTooltip() != null) {
             text.getTooltip().hide();
         }
-    }
-
-    private void clearError(Field field) {
-        final TextField text = textFields.get(field);
-        invalidFields.remove(field);
-        hideErrorMessage(text);
-        text.setStyle("");
-        text.setTooltip(null);
     }
 }

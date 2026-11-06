@@ -36,7 +36,6 @@ import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -73,6 +72,7 @@ import javafx.scene.control.SplitPane;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
+import javafx.scene.control.TableRow;
 import javafx.scene.control.TableView;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.control.ToggleGroup;
@@ -83,6 +83,7 @@ import javafx.scene.input.TransferMode;
 import javafx.scene.input.KeyCodeCombination;
 import javafx.scene.input.KeyCombination;
 import javafx.scene.input.KeyEvent;
+import javafx.scene.input.MouseButton;
 import javafx.scene.layout.HBox;
 import javafx.stage.DirectoryChooser;
 import javafx.stage.Stage;
@@ -129,6 +130,8 @@ public class GeoTagger implements Initializable {
     @FXML
     private Button saveButton;
     @FXML
+    private Button editButton;
+    @FXML
     private Button undoButton;
     @FXML
     private Button redoButton;
@@ -172,8 +175,6 @@ public class GeoTagger implements Initializable {
     private PreviewPane previewPane;
     @FXML
     private Tab imageInfoTab;
-    @FXML
-    private DetailsPane detailsPane;
     @FXML
     private ImageInfoPane imageInfoPane;
     @FXML
@@ -257,6 +258,7 @@ public class GeoTagger implements Initializable {
                 openFolder();
             }
         });
+        stage.getScene().getAccelerators().put(new KeyCodeCombination(KeyCode.E, KeyCombination.SHORTCUT_DOWN), this::editSelection);
         stage.setOnCloseRequest(event -> {
             if (busy) {
                 // loading or saving - closing now could lose changes
@@ -406,13 +408,37 @@ public class GeoTagger implements Initializable {
             }
         });
         imageInfoTab.setOnSelectionChanged(event -> showImageInfo());
-        detailsPane.setOnEdit((field, value) -> perform(ChangeFieldsAction.sameValue(
-                "Set " + DetailsPane.label(field).toLowerCase(Locale.ROOT), selectedFiles(), field, value)));
+        // double click on a file: edit it, like in GeoSetter
+        mediaTable.setRowFactory(table -> {
+            final TableRow<MediaFile> row = new TableRow<>();
+            row.setOnMouseClicked(event -> {
+                if (event.getButton() == MouseButton.PRIMARY && event.getClickCount() == 2 && !row.isEmpty()) {
+                    editSelection();
+                }
+            });
+            return row;
+        });
+    }
+
+    /**
+     * Opens the edit dialog for the selected files - the changes become one undo step.
+     */
+    @FXML
+    private void editSelection() {
+        final List<MediaFile> selected = selectedFiles();
+        if (busy || folder == null || selected.isEmpty()) {
+            return;
+        }
+        EditDialog.show(stage, selected).ifPresent(changes -> {
+            final Map<MediaFile, Map<Field, Object>> values = new LinkedHashMap<>();
+            selected.forEach(file -> values.put(file, changes));
+            perform(new ChangeFieldsAction("Edit", values));
+        });
     }
 
     private void selectionChanged() {
         final List<MediaFile> selected = selectedFiles();
-        detailsPane.setFiles(selected);
+        updateButtons();
         showImageInfo();
         mapPane.showFiles(files, selected);
         // several files: the user picks them - the map stays where it is
@@ -576,7 +602,6 @@ public class GeoTagger implements Initializable {
         mediaTable.refresh();
         updateFilterCounts();
         updateButtons();
-        detailsPane.setFiles(selectedFiles());
         mapPane.showFiles(files, selectedFiles());
         updateStatus();
     }
@@ -590,6 +615,7 @@ public class GeoTagger implements Initializable {
         saveButton.setText(changed == 0 ? "Save" : "Save (" + changed + ")");
         // without a usable ExifTool nothing can be written - the changes stay pending
         saveButton.setDisable(busy || changed == 0 || writer == null);
+        editButton.setDisable(busy || folder == null || selectedFiles().isEmpty());
         undoButton.setDisable(busy || folder == null || !DoUndoManager.getInstance().canUndo(undoKey()));
         redoButton.setDisable(busy || folder == null || !DoUndoManager.getInstance().canDo(undoKey()));
     }
@@ -762,8 +788,6 @@ public class GeoTagger implements Initializable {
 
     @FXML
     private void save() {
-        // ctrl+s while typing: what is in the field counts as well
-        detailsPane.commitAll();
         saveChanges(null);
     }
 
@@ -874,7 +898,6 @@ public class GeoTagger implements Initializable {
         preferencesButton.setDisable(busy);
         // the files are changed in the background while saving - no edits meanwhile
         mediaTable.setDisable(busy);
-        detailsPane.setDisable(busy);
         updateButtons();
     }
 

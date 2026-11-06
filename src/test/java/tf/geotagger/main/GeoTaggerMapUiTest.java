@@ -28,11 +28,13 @@ package tf.geotagger.main;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 import javafx.geometry.Point2D;
 import javafx.scene.Node;
+import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
 import javafx.scene.control.skin.VirtualFlow;
@@ -140,15 +142,6 @@ class GeoTaggerMapUiTest {
         return file;
     }
 
-    // replaces the text of a details field and presses Enter, like a user
-    private static void enter(FxRobot robot, Field field, String text) {
-        final TextField input = robot.lookup("#details-" + field.name()).queryAs(TextField.class);
-        robot.clickOn(input);
-        robot.interact(input::selectAll);
-        robot.write(text).type(KeyCode.ENTER);
-        WaitForAsyncUtils.waitForFxEvents();
-    }
-
     @Test
     void markersShownForFilesWithCoordinates(FxRobot robot) throws TimeoutException {
         loadImages(robot);
@@ -231,11 +224,18 @@ class GeoTaggerMapUiTest {
 
         robot.clickOn("#undoButton");
 
+        final TableColumn<MediaFile, ?> coordinates = table(robot).getColumns().stream()
+                .filter(column -> "coordinatesColumn".equals(column.getId())).findFirst().orElseThrow();
+        assertEquals("", coordinates.getCellData(c));
+        assertEquals("", coordinates.getCellData(d));
+        // the dialog shows the values after the undo - no "(different)" left over
+        UiTestSupport.openEditDialog(robot);
         for (Field field : List.of(Field.LATITUDE, Field.LONGITUDE)) {
-            final TextField input = robot.lookup("#details-" + field.name()).queryAs(TextField.class);
+            final TextField input = UiTestSupport.editField(robot, field);
             assertEquals("", input.getText(), field.name());
             assertEquals("", input.getPromptText(), field.name());
         }
+        robot.clickOn("#editCancel");
     }
 
     @Test
@@ -341,7 +341,7 @@ class GeoTaggerMapUiTest {
     void editingCoordinatesMovesTheMarker(FxRobot robot) throws TimeoutException {
         loadImages(robot);
         select(robot, "a.jpg");
-        enter(robot, Field.LATITUDE, "45.5");
+        UiTestSupport.edit(robot, Map.of(Field.LATITUDE, "45.5"));
         assertEquals(45.5, ((Number) js(robot, "geoMarkers[" + jsId("a.jpg") + "].getLatLng().lat")).doubleValue(), 1e-9);
     }
 }

@@ -33,9 +33,10 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.TableCell;
-import javafx.scene.control.TableColumn;
+import javafx.scene.control.TableRow;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
 import javafx.scene.control.Tooltip;
@@ -60,9 +61,13 @@ import tf.geotagger.model.MediaFile;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static tf.geotagger.main.UiTestSupport.edit;
+import static tf.geotagger.main.UiTestSupport.editField;
+import static tf.geotagger.main.UiTestSupport.openEditDialog;
+import static tf.geotagger.main.UiTestSupport.typeInto;
 
 /**
- * UI tests of editing: details, undo / redo, multi-selection, saving.
+ * UI tests of editing: edit dialog, undo / redo, multi-selection, saving.
  */
 @Tag("UI")
 @ExtendWith(ApplicationExtension.class)
@@ -124,7 +129,7 @@ class GeoTaggerEditUiTest {
                 .getStyleClass().contains("changed");
     }
 
-    // selects the file in the list - the details show it afterwards
+    // selects the file in the list
     private static MediaFile select(FxRobot robot, String name) {
         final TableView<MediaFile> table = table(robot);
         final MediaFile file = fileNamed(table, name);
@@ -132,26 +137,9 @@ class GeoTaggerEditUiTest {
         return file;
     }
 
-    // replaces the text of a details field and presses Enter, like a user
-    private static void enter(FxRobot robot, Field field, String text) {
-        final TextField input = robot.lookup("#details-" + field.name()).queryAs(TextField.class);
-        robot.clickOn(input);
-        robot.interact(input::selectAll);
-        robot.write(text).type(KeyCode.ENTER);
+    private static boolean editDialogIsOpen(FxRobot robot) {
         WaitForAsyncUtils.waitForFxEvents();
-    }
-
-    // replaces the text of a details field and leaves it with Tab, like a user
-    private static void enterAndTab(FxRobot robot, Field field, String text) {
-        final TextField input = robot.lookup("#details-" + field.name()).queryAs(TextField.class);
-        robot.clickOn(input);
-        robot.interact(input::selectAll);
-        robot.write(text).type(KeyCode.TAB);
-        WaitForAsyncUtils.waitForFxEvents();
-    }
-
-    private static TextField detailsField(FxRobot robot, Field field) {
-        return robot.lookup("#details-" + field.name()).queryAs(TextField.class);
+        return robot.lookup("#editOk").tryQuery().map(Node::isVisible).orElse(false);
     }
 
     @Test
@@ -171,36 +159,88 @@ class GeoTaggerEditUiTest {
     void invalidInputIsShownRightAwayAtTheLeft(FxRobot robot) throws TimeoutException {
         loadTwoImages(robot);
         select(robot, "b.jpg");
+        openEditDialog(robot);
 
-        enter(robot, Field.LATITUDE, "91");
+        typeInto(robot, Field.LATITUDE, "91");
+        robot.type(KeyCode.ENTER);
 
-        final TextField latitude = detailsField(robot, Field.LATITUDE);
+        final TextField latitude = editField(robot, Field.LATITUDE);
         final Tooltip error = latitude.getTooltip();
         assertTrue(error != null && error.isShowing());
         final double fieldLeft = latitude.localToScreen(latitude.getBoundsInLocal()).getMinX();
         assertEquals(fieldLeft, error.getAnchorX(), 2.0);
+        robot.clickOn("#editCancel");
     }
 
     @Test
-    void invalidInputStaysWhenAnotherFieldIsEdited(FxRobot robot) throws TimeoutException {
+    void invalidLatitudeBlocksOk(FxRobot robot) throws TimeoutException {
         loadTwoImages(robot);
         final MediaFile file = select(robot, "b.jpg");
+        openEditDialog(robot);
 
-        enterAndTab(robot, Field.LATITUDE, "100");
-        enterAndTab(robot, Field.LONGITUDE, "100");
+        typeInto(robot, Field.LATITUDE, "91");
 
-        assertEquals(100.0, file.value(Field.LONGITUDE));
-        final TextField latitude = detailsField(robot, Field.LATITUDE);
-        assertEquals("100", latitude.getText());
-        assertTrue(latitude.getStyle().contains("red"));
+        assertTrue(robot.lookup("#editOk").queryButton().isDisabled());
+        assertTrue(editField(robot, Field.LATITUDE).getStyle().contains("red"));
+        robot.type(KeyCode.ENTER);
+        assertTrue(editDialogIsOpen(robot));
+
+        robot.clickOn("#editCancel");
+        assertFalse(editDialogIsOpen(robot));
+        assertFalse(file.isChanged());
+    }
+
+    @Test
+    void cancelChangesNothing(FxRobot robot) throws TimeoutException {
+        loadTwoImages(robot);
+        final MediaFile file = select(robot, "a.jpg");
+        openEditDialog(robot);
+
+        typeInto(robot, Field.CITY, "Bozen");
+        robot.clickOn("#editCancel");
+
+        assertFalse(editDialogIsOpen(robot));
+        assertEquals("Meran", file.value(Field.CITY));
+        assertFalse(file.isChanged());
+        assertTrue(robot.lookup("#undoButton").queryButton().isDisabled());
+    }
+
+    @Test
+    void doubleClickOpensTheDialog(FxRobot robot) throws TimeoutException {
+        loadTwoImages(robot);
+        final MediaFile file = fileNamed(table(robot), "a.jpg");
+        final Node row = robot.lookup(".table-row-cell").queryAllAs(TableRow.class).stream()
+                .filter(candidate -> candidate.getItem() == file).findFirst().orElseThrow();
+
+        robot.doubleClickOn(row);
+        UiTestSupport.waitForEditDialog(robot);
+
+        assertEquals("Meran", editField(robot, Field.CITY).getText());
+        robot.clickOn("#editCancel");
+    }
+
+    @Test
+    void oneUndoStepForSeveralFields(FxRobot robot) throws TimeoutException {
+        loadTwoImages(robot);
+        final MediaFile file = select(robot, "a.jpg");
+        edit(robot, Map.of(Field.CITY, "Bozen", Field.COUNTRY, "Italien"));
+        assertEquals("Bozen", file.value(Field.CITY));
+        assertEquals("Italien", file.value(Field.COUNTRY));
+
+        robot.clickOn("#undoButton");
+
+        assertEquals("Meran", file.value(Field.CITY));
+        assertEquals(null, file.value(Field.COUNTRY));
+        assertFalse(file.isChanged());
+        assertTrue(robot.lookup("#undoButton").queryButton().isDisabled());
     }
 
     @Test
     void undoAndRedoWithKeysOutsideTextFields(FxRobot robot) throws TimeoutException {
         loadTwoImages(robot);
         final MediaFile file = select(robot, "a.jpg");
-        enter(robot, Field.CITY, "Bozen");
-        robot.clickOn(robot.lookup(".table-row-cell").nth(0).queryAs(javafx.scene.Node.class));
+        edit(robot, Map.of(Field.CITY, "Bozen"));
+        robot.clickOn(robot.lookup(".table-row-cell").nth(0).queryAs(Node.class));
         select(robot, "a.jpg");
 
         robot.push(KeyCode.CONTROL, KeyCode.Z);
@@ -214,7 +254,7 @@ class GeoTaggerEditUiTest {
     void ctrlSSaves(FxRobot robot) throws TimeoutException {
         loadTwoImages(robot);
         final MediaFile file = select(robot, "a.jpg");
-        enter(robot, Field.CITY, "Bozen");
+        edit(robot, Map.of(Field.CITY, "Bozen"));
 
         robot.push(KeyCode.CONTROL, KeyCode.S);
         UiTestSupport.waitUntilIdle(controller);
@@ -227,12 +267,14 @@ class GeoTaggerEditUiTest {
     void fieldsAreOnlyAsWideAsNeeded(FxRobot robot) throws TimeoutException {
         loadTwoImages(robot);
         select(robot, "a.jpg");
+        openEditDialog(robot);
 
-        final double countryCode = detailsField(robot, Field.COUNTRY_CODE).getWidth();
-        final double latitude = detailsField(robot, Field.LATITUDE).getWidth();
-        final double city = detailsField(robot, Field.CITY).getWidth();
+        final double countryCode = editField(robot, Field.COUNTRY_CODE).getWidth();
+        final double latitude = editField(robot, Field.LATITUDE).getWidth();
+        final double city = editField(robot, Field.CITY).getWidth();
         assertTrue(countryCode < latitude, countryCode + " < " + latitude);
         assertTrue(latitude < city, latitude + " < " + city);
+        robot.clickOn("#editCancel");
     }
 
     @Test
@@ -240,7 +282,7 @@ class GeoTaggerEditUiTest {
         loadTwoImages(robot);
         final MediaFile file = select(robot, "a.jpg");
 
-        enter(robot, Field.CITY, "Bozen");
+        edit(robot, Map.of(Field.CITY, "Bozen"));
 
         assertEquals("Bozen", file.value(Field.CITY));
         assertTrue(isMarkedChanged(robot, file, "cityColumn"));
@@ -250,22 +292,10 @@ class GeoTaggerEditUiTest {
     }
 
     @Test
-    void invalidLatitudeIsRejected(FxRobot robot) throws TimeoutException {
-        loadTwoImages(robot);
-        final MediaFile file = select(robot, "b.jpg");
-
-        enter(robot, Field.LATITUDE, "91");
-
-        final TextField latitude = robot.lookup("#details-LATITUDE").queryAs(TextField.class);
-        assertTrue(latitude.getStyle().contains("red"));
-        assertFalse(file.isChanged());
-    }
-
-    @Test
     void undoAndRedo(FxRobot robot) throws TimeoutException {
         loadTwoImages(robot);
         final MediaFile file = select(robot, "a.jpg");
-        enter(robot, Field.CITY, "Bozen");
+        edit(robot, Map.of(Field.CITY, "Bozen"));
 
         robot.clickOn("#undoButton");
         assertEquals("Meran", file.value(Field.CITY));
@@ -282,7 +312,7 @@ class GeoTaggerEditUiTest {
         final TableView<MediaFile> table = table(robot);
         robot.interact(() -> table.getSelectionModel().selectAll());
 
-        enter(robot, Field.CITY, "Bozen");
+        edit(robot, Map.of(Field.CITY, "Bozen"));
 
         table.getItems().forEach(file -> assertEquals("Bozen", file.value(Field.CITY)));
         assertEquals("Save (2)", robot.lookup("#saveButton").queryButton().getText());
@@ -292,7 +322,7 @@ class GeoTaggerEditUiTest {
     void saveWritesTheFile(FxRobot robot) throws TimeoutException {
         loadTwoImages(robot);
         final MediaFile file = select(robot, "a.jpg");
-        enter(robot, Field.CITY, "Bozen");
+        edit(robot, Map.of(Field.CITY, "Bozen"));
 
         robot.clickOn("#saveButton");
         UiTestSupport.waitUntilIdle(controller);
@@ -309,7 +339,7 @@ class GeoTaggerEditUiTest {
     void saveIsImpossibleWithoutExifTool(FxRobot robot) throws TimeoutException {
         loadTwoImages(robot);
         select(robot, "a.jpg");
-        enter(robot, Field.CITY, "Bozen");
+        edit(robot, Map.of(Field.CITY, "Bozen"));
 
         // e.g. a wrong path confirmed in the preferences - the changes must not look saveable
         GeoTaggerPreferences.EXIFTOOL_PATH.put(dir.resolve("missing.exe").toString());
@@ -332,7 +362,7 @@ class GeoTaggerEditUiTest {
             }
         }));
 
-        enter(robot, Field.CITY, "Bozen");
+        edit(robot, Map.of(Field.CITY, "Bozen"));
 
         assertEquals("Bozen", fileNamed(table(robot), "a.jpg").value(Field.CITY));
         assertFalse(cleared.get());

@@ -27,11 +27,17 @@ package tf.geotagger.main;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import javafx.scene.Node;
+import javafx.scene.control.TextField;
+import javafx.scene.input.KeyCode;
 import javafx.stage.Stage;
 import org.junit.jupiter.api.Assumptions;
+import org.testfx.api.FxRobot;
 import org.testfx.util.WaitForAsyncUtils;
+import tf.geotagger.model.Field;
 
 /**
  * Helpers for the UI tests of GeoTagger - see docs/superpowers/plans/2026-11-05-plan-ui-test-geruest.md.
@@ -92,6 +98,70 @@ final class UiTestSupport {
      */
     static void waitUntilMapReady(GeoTagger controller) throws TimeoutException {
         WaitForAsyncUtils.waitFor(30, TimeUnit.SECONDS, () -> controller.mapPane().isReady());
+        WaitForAsyncUtils.waitForFxEvents();
+    }
+
+    /**
+     * Opens the edit dialog for the selected files with ctrl+e, like a user.
+     *
+     * @param robot robot of the test
+     * @throws TimeoutException if the dialog doesn't show up within 5 seconds
+     */
+    static void openEditDialog(FxRobot robot) throws TimeoutException {
+        // keys go to the focused window - the first test of a run starts without the focus; a click on the status
+        // bar changes nothing else
+        robot.clickOn("#statusLabel");
+        robot.push(KeyCode.CONTROL, KeyCode.E);
+        waitForEditDialog(robot);
+    }
+
+    /**
+     * Waits until the edit dialog is shown.
+     *
+     * @param robot robot of the test
+     * @throws TimeoutException if the dialog doesn't show up within 5 seconds
+     */
+    static void waitForEditDialog(FxRobot robot) throws TimeoutException {
+        WaitForAsyncUtils.waitFor(5, TimeUnit.SECONDS,
+                () -> robot.lookup("#editOk").tryQuery().map(Node::isVisible).orElse(false));
+        WaitForAsyncUtils.waitForFxEvents();
+    }
+
+    /**
+     * @param robot robot of the test
+     * @param field a field
+     * @return its text field in the open edit dialog
+     */
+    static TextField editField(FxRobot robot, Field field) {
+        return robot.lookup("#details-" + field.name()).queryAs(TextField.class);
+    }
+
+    /**
+     * Replaces the text of a field in the open edit dialog, like a user.
+     *
+     * @param robot robot of the test
+     * @param field field to change
+     * @param text new text
+     */
+    static void typeInto(FxRobot robot, Field field, String text) {
+        final TextField input = editField(robot, field);
+        robot.clickOn(input);
+        robot.interact(input::selectAll);
+        robot.write(text);
+        WaitForAsyncUtils.waitForFxEvents();
+    }
+
+    /**
+     * Changes fields of the selected files in the edit dialog and confirms with OK, like a user.
+     *
+     * @param robot robot of the test
+     * @param values new text per field
+     * @throws TimeoutException if the dialog doesn't show up within 5 seconds
+     */
+    static void edit(FxRobot robot, Map<Field, String> values) throws TimeoutException {
+        openEditDialog(robot);
+        values.forEach((field, text) -> typeInto(robot, field, text));
+        robot.clickOn("#editOk");
         WaitForAsyncUtils.waitForFxEvents();
     }
 }
