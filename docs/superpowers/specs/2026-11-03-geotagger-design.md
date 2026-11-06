@@ -31,7 +31,7 @@ Videos durchlaufen denselben Ablauf.
 ### In Version 1
 
 - Ordner öffnen, optional mit Unterordnern. Die Formate sind JPEG, RAW, HEIC, TIFF, PNG und Videos (MOV, MP4).
-- Dateiliste ohne Thumbnails mit den Spalten Name, Aufnahmezeit, Ort und Status (Koordinaten / Ort / Höhe / geändert).
+- Dateiliste ohne Thumbnails mit den Werten als Spalten (siehe „Hauptfenster“); geänderte Werte sind markiert.
 - Große Vorschau des ausgewählten Bildes mit Blättern, Einpassen und 100 %.
 - Statusfilter: Alle, Ohne Koordinaten, Ohne Ort, Ohne Höhe, Geändert.
 - Track-Sync über einen Dialog, Details siehe unten.
@@ -42,7 +42,7 @@ Videos durchlaufen denselben Ablauf.
 - Ortsinformationen per Reverse-Geocoding. Die Dienste sind dieselben wie in GPXEditor (Mapbox) plus GeoNames (`api.geonames.org`, mit Benutzername).
 - Höhe per openrouteservice oder lokalen SRTM-Daten, wahlweise aus dem Track.
 - Zeitzone offline aus den Koordinaten.
-- Reiter „Details“: editierbare Felder. Bei Mehrfachauswahl wird „(unterschiedlich)“ angezeigt, und eine Eingabe gilt für alle ausgewählten Dateien.
+- Dialog „Bearbeiten“: editierbare Felder für die Auswahl. Bei Mehrfachauswahl wird „(different)“ angezeigt, und eine Eingabe gilt für alle ausgewählten Dateien. OK ist ein Undo-Schritt.
 - Reiter „Bild-Info (ExifTool)“: alle rohen Tags der ausgewählten Datei, nur lesbar.
 - Track-Liste:
   - GPX-Dateien im Ordner (und in Unterordnern) werden automatisch aufgelistet.
@@ -142,16 +142,18 @@ Die Abhängigkeiten zeigen nur in eine Richtung: `ui` → `enrich` / `sync` / `m
 
 Das Layout ist an GeoSetter angelehnt:
 
-- **Werkzeugleiste:** Ordnerpfad, Häkchen „Unterordner“, Track-Sync, Ort ermitteln, Höhe ermitteln, Undo, Redo und „Speichern (n)“ mit der Anzahl ungespeicherter Dateien.
+- **Werkzeugleiste:** Ordnerpfad, Häkchen „Unterordner“, „Edit…“, Track-Sync, Ort ermitteln, Höhe ermitteln, Undo, Redo und „Speichern (n)“ mit der Anzahl ungespeicherter Dateien. Eigene Icon-Leisten je Bereich kommen später.
 - **Links oben:**
   - Statusfilter als Chips mit Anzahl.
-  - Darunter die Dateiliste. Spalten: Name, Aufnahmezeit, Ort, Statussymbole.
-  - Die Auswahl kann mehrere Dateien umfassen.
+  - Darunter die Dateiliste. Spalten: Name, Aufnahmezeit, Koordinaten (Grad/Min/Sek, z. B. `N46°40'48.05"; E11°5'28.61"`), Höhe, Ländercode, Land, Region, Ort, Sublocation, Zeitzone.
+  - Spalten lassen sich über den Menüknopf im Tabellenkopf ausblenden. Geänderte, noch nicht gespeicherte Werte sind markiert (orange, fett).
+  - Die Tabelle ist nicht editierbar. Die Auswahl kann mehrere Dateien umfassen.
+- **Bearbeiten:** Dialog über Strg+E, Doppelklick oder „Edit…“ für die Auswahl. Bei Mehrfachauswahl zeigen unterschiedliche Werte „(different)“. Ungültige Eingaben sind rot und sperren OK. OK ist ein Undo-Schritt, Esc bricht ab.
 - **Links unten:** große Vorschau mit den Knöpfen Erstes, Zurück, Weiter, Letztes, Einpassen und 100 %.
-- **Rechts oben:** die Karte.
-- **Rechts Mitte:** die Reiter „Details“ und „Bild-Info (ExifTool)“.
-- **Rechts unten:** Track-Liste mit Häkchen zum Laden und Einblenden sowie „+ GPX“.
-- **Statusleiste:** Anzahl Dateien, ausgewählt, ungespeichert.
+- **Rechts oben:** die Reiter „Karte“ und „Bild-Info (ExifTool)“.
+- **Rechts unten:** GPX-Sektion. Links die Track-Liste mit Häkchen zum Laden und Einblenden sowie „+ GPX“. Rechts die Punkte der ausgewählten Tracks: Nr., Zeit, Koordinaten, Distanz, Höhe. Ein ausgewählter Punkt zentriert die Karte.
+- **Statusleiste:** „n files (m with coordinates) - k selected“; die Anzahl ungespeicherter Dateien steht auf „Speichern (n)“.
+- **Schrift:** 11 px.
 
 Aktionen der Werkzeugleiste wirken auf die Auswahl. Ist nichts ausgewählt, wirken sie auf alle gefilterten Dateien, für die die Aktion sinnvoll ist. „Ort ermitteln“ läuft zum Beispiel über alle Dateien mit Koordinaten, aber ohne Ort.
 
