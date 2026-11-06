@@ -126,7 +126,8 @@ class MetadataReaderTest {
 
         assertEquals(105, media.size());
         assertEquals(files, media.stream().map(MediaFile::path).toList());
-        assertEquals(List.of(100, 105), progress);
+        // progress every 50 files - with 100 the status looked like hanging (user feedback)
+        assertEquals(List.of(50, 100, 105), progress);
     }
 
     @Test

@@ -47,7 +47,8 @@ import tf.geotagger.model.Snapshot;
  * For SIDECAR files the values of an existing {@code <name>.xmp} take precedence over the values of the file itself.
  */
 public class MetadataReader {
-    static final int CHUNK_SIZE = 100;
+    // 50: the progress moves often enough not to look like hanging, the ExifTool calls stay few
+    static final int CHUNK_SIZE = 50;
 
     private final ExifTool exifTool;
 

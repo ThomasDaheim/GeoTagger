@@ -214,6 +214,28 @@ class GeoTaggerMapUiTest {
     }
 
     @Test
+    void undoOfAPositionLeavesNoDifferentValues(FxRobot robot) throws TimeoutException {
+        TestFiles.image(dir, "d.jpg");
+        loadImages(robot);
+        final MediaFile c = fileNamed(table(robot), "c.jpg");
+        final MediaFile d = fileNamed(table(robot), "d.jpg");
+        robot.interact(() -> {
+            table(robot).getSelectionModel().clearSelection();
+            table(robot).getSelectionModel().select(c);
+            table(robot).getSelectionModel().select(d);
+        });
+        robot.interact(() -> controller.setPosition(List.of(c, d), new LatLon(46.25, 11.25), "Set position"));
+
+        robot.clickOn("#undoButton");
+
+        for (Field field : List.of(Field.LATITUDE, Field.LONGITUDE)) {
+            final TextField input = robot.lookup("#details-" + field.name()).queryAs(TextField.class);
+            assertEquals("", input.getText(), field.name());
+            assertEquals("", input.getPromptText(), field.name());
+        }
+    }
+
+    @Test
     void draggingFilesOntoTheMapSetsTheirPosition(FxRobot robot) throws TimeoutException {
         loadImages(robot);
         js(robot, "myMap.setView([46.0, 11.0], 16, {animate: false})");
