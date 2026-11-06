@@ -32,6 +32,7 @@ import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -395,16 +396,16 @@ public class GeoTagger implements Initializable {
         mapPane.setOnSetPosition((selected, position) -> setPosition(selected, position, "Set position"));
         // ctrl + drag on the map: the files in the rectangle - with shift added to the selection
         mapPane.setOnAreaSelected((inside, shiftDown) -> {
+            // in the order of the table - files hidden by the filter can't be selected
+            final int[] indices = inside.stream().mapToInt(mediaTable.getItems()::indexOf).filter(index -> index >= 0)
+                    .sorted().toArray();
             final MultipleSelectionModel<MediaFile> selection = mediaTable.getSelectionModel();
             if (!shiftDown) {
                 selection.clearSelection();
             }
-            for (MediaFile file : inside) {
-                // files hidden by the filter can't be selected
-                final int index = mediaTable.getItems().indexOf(file);
-                if (index >= 0) {
-                    selection.select(index);
-                }
+            // all at once: one change for the listeners - not a refresh and a pan to a single file per file
+            if (indices.length > 0) {
+                selection.selectIndices(indices[0], Arrays.copyOfRange(indices, 1, indices.length));
             }
         });
         // drag the selected files onto the map

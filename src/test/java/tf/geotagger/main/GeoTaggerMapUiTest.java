@@ -296,12 +296,17 @@ class GeoTaggerMapUiTest {
         final Point2D from = point(robot, 46.45, 11.45);
         final Point2D to = point(robot, 46.65, 11.65);
 
+        final String view = "myMap.getCenter().lat + ',' + myMap.getCenter().lng + ',' + myMap.getZoom()";
+        final Object before = js(robot, view);
+
         robot.press(KeyCode.CONTROL).moveTo(from).press(MouseButton.PRIMARY).moveTo(to)
                 .release(MouseButton.PRIMARY).release(KeyCode.CONTROL);
         WaitForAsyncUtils.waitForFxEvents();
 
         assertEquals(Set.of("a.jpg", "b.jpg"), table(robot).getSelectionModel().getSelectedItems().stream()
                 .map(file -> file.path().getFileName().toString()).collect(Collectors.toSet()));
+        // several files are selected at once - the map stays where the user drew the rectangle
+        assertEquals(before, js(robot, view));
     }
 
     @Test
