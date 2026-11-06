@@ -42,15 +42,20 @@ import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
+import tf.geo.LatLon;
 
 /**
  * Reads the track points (trk / trkseg / trkpt) of GPX 1.0 and 1.1 files.
  *
  * Jackson XML is used on purpose instead of the JDK's StAX parser: it is the data binding the other applications
  * (e.g. GPXEditor) use as well, and consistency between them is preferred over saving a dependency.
- * Element names are matched without namespace, so both GPX versions work. Only time, position and elevation are
- * needed for the track sync - all other elements (wpt, rte, name, extensions, ...) are ignored.
+ * Element names are matched without namespace, so both GPX versions work. Read are time, position and elevation for
+ * the track sync and the colour of each track (gpx_style or Garmin extension) for the map - all other elements (wpt,
+ * rte, name, other extensions, ...) are ignored.
  */
 public final class GpxReader {
     // only the parts of the GPX schema we need - see https://www.topografix.com/GPX/1/1/
@@ -58,8 +63,29 @@ public final class GpxReader {
     record Gpx(@JacksonXmlElementWrapper(useWrapping = false) @JacksonXmlProperty(localName = "trk") List<Trk> tracks) {
     }
 
-    record Trk(@JacksonXmlElementWrapper(useWrapping = false) @JacksonXmlProperty(localName = "trkseg") List<Trkseg> segments) {
+    record Trk(@JacksonXmlElementWrapper(useWrapping = false) @JacksonXmlProperty(localName = "trkseg") List<Trkseg> segments,
+            @JacksonXmlProperty(localName = "extensions") TrkExtensions extensions) {
     }
+
+    // colour of a track: gpx_style <line><color> or Garmin <gpxx:TrackExtension><gpxx:DisplayColor> - same as GPXEditor
+    record TrkExtensions(@JacksonXmlProperty(localName = "line") Line line,
+            @JacksonXmlProperty(localName = "TrackExtension") GarminTrackExtension garmin) {
+    }
+
+    record Line(@JacksonXmlProperty(localName = "color") String color) {
+    }
+
+    record GarminTrackExtension(@JacksonXmlProperty(localName = "DisplayColor") String displayColor) {
+    }
+
+    // Garmin's colour names as in GPXEditor's GarminColor - CSS names, DarkYellow is drawn as goldenrod there
+    private static final Map<String, String> GARMIN_COLORS = Map.ofEntries(
+            Map.entry("Black", "black"), Map.entry("DarkRed", "darkred"), Map.entry("DarkGreen", "darkgreen"),
+            Map.entry("DarkYellow", "goldenrod"), Map.entry("DarkBlue", "darkblue"), Map.entry("DarkMagenta", "darkmagenta"),
+            Map.entry("DarkCyan", "darkcyan"), Map.entry("LightGray", "lightgray"), Map.entry("DarkGray", "darkgray"),
+            Map.entry("Red", "red"), Map.entry("Green", "green"), Map.entry("Yellow", "yellow"), Map.entry("Blue", "blue"),
+            Map.entry("Magenta", "magenta"), Map.entry("Cyan", "cyan"), Map.entry("White", "white"));
+    private static final Pattern HEX_COLOR = Pattern.compile("#?([0-9a-fA-F]{6})");
 
     record Trkseg(@JacksonXmlElementWrapper(useWrapping = false) @JacksonXmlProperty(localName = "trkpt") List<Trkpt> points) {
     }
@@ -88,6 +114,28 @@ public final class GpxReader {
      * @throws IOException if the file can't be read or isn't valid GPX
      */
     public static List<TrackPoint> read(Path gpx) throws IOException {
+        return readContent(gpx).points();
+    }
+
+    /**
+     * Segments for the map - points without time are included, segments without points left out.
+     *
+     * @param gpx GPX 1.0 or 1.1 file
+     * @return one line per segment with the colour of its track
+     * @throws IOException if the file can't be read or isn't valid GPX
+     */
+    public static List<GpxLine> readLines(Path gpx) throws IOException {
+        return readContent(gpx).lines();
+    }
+
+    /**
+     * Reads the file once for both the map and the track sync.
+     *
+     * @param gpx GPX 1.0 or 1.1 file
+     * @return segments with colour, track points with time
+     * @throws IOException if the file can't be read or isn't valid GPX
+     */
+    public static GpxContent readContent(Path gpx) throws IOException {
         final Gpx content;
         try (InputStream in = Files.newInputStream(gpx)) {
             content = MAPPER.readValue(in, Gpx.class);
@@ -95,18 +143,54 @@ public final class GpxReader {
             throw new IOException("Can't read GPX file " + gpx + ": " + ex.getOriginalMessage(), ex);
         }
 
+        final List<GpxLine> lines = new ArrayList<>();
         final List<TrackPoint> points = new ArrayList<>();
         for (Trk track : nullToEmpty(content.tracks())) {
+            final String color = color(track.extensions());
             for (Trkseg segment : nullToEmpty(track.segments())) {
+                final List<LatLon> positions = new ArrayList<>();
                 for (Trkpt point : nullToEmpty(segment.points())) {
+                    if (point.latitude() == null || point.longitude() == null) {
+                        continue;
+                    }
                     final Instant time = toInstant(point.time());
-                    if (time != null && point.latitude() != null && point.longitude() != null) {
+                    if (time != null) {
                         points.add(new TrackPoint(time, point.latitude(), point.longitude(), toDouble(point.elevation())));
                     }
+                    // the format is checked, not the range - such a point would break the map
+                    if (Math.abs(point.latitude()) <= 90 && Math.abs(point.longitude()) <= 180) {
+                        positions.add(new LatLon(point.latitude(), point.longitude()));
+                    }
+                }
+                if (!positions.isEmpty()) {
+                    lines.add(new GpxLine(List.copyOf(positions), color));
                 }
             }
         }
-        return points;
+        return new GpxContent(List.copyOf(lines), List.copyOf(points));
+    }
+
+    /**
+     * @param gpxStyleColor value of gpx_style {@code <line><color>}, e.g. "FF0000" - may be null
+     * @param garminColor value of Garmin's {@code <DisplayColor>}, e.g. "DarkRed" - may be null
+     * @return CSS colour, gpx_style first - null if neither is usable
+     */
+    public static String cssColor(String gpxStyleColor, String garminColor) {
+        if (gpxStyleColor != null) {
+            final Matcher hex = HEX_COLOR.matcher(gpxStyleColor.trim());
+            if (hex.matches()) {
+                return "#" + hex.group(1);
+            }
+        }
+        return garminColor == null ? null : GARMIN_COLORS.get(garminColor.trim());
+    }
+
+    private static String color(TrkExtensions extensions) {
+        if (extensions == null) {
+            return null;
+        }
+        return cssColor(extensions.line() == null ? null : extensions.line().color(),
+                extensions.garmin() == null ? null : extensions.garmin().displayColor());
     }
 
     /**

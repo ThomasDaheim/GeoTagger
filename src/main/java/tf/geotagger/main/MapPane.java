@@ -47,6 +47,7 @@ import tf.geo.LatLon;
 import tf.geo.map.LeafletMapView;
 import tf.geo.map.MapConfig;
 import tf.geo.map.MapListener;
+import tf.geo.map.TrackLine;
 import tf.geotagger.model.MediaFile;
 import tf.geotagger.track.GpxTrack;
 import tf.geotagger.track.TrackPoint;
@@ -231,7 +232,7 @@ public class MapPane extends StackPane {
                 points.add(new LatLon(point.latitude(), point.longitude()));
             }
         }
-        mapView.showTrack(track.id(), points, color);
+        mapView.showTrack(track.id(), List.of(new TrackLine(points, color)));
     }
 
     /**
