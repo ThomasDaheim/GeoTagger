@@ -222,6 +222,33 @@ class GeoTaggerEditUiTest {
     }
 
     @Test
+    void ctrlZUndoesFieldsAlreadyLeft(FxRobot robot) throws TimeoutException {
+        loadTwoImages(robot);
+        select(robot, "a.jpg");
+        openEditDialog(robot);
+        // user feedback: country code "DE", field left - ctrl+z did nothing
+        typeInto(robot, Field.COUNTRY_CODE, "DE");
+        robot.type(KeyCode.TAB);
+        typeInto(robot, Field.CITY, "Bozen");
+        robot.type(KeyCode.TAB);
+
+        robot.push(KeyCode.CONTROL, KeyCode.Z);
+        WaitForAsyncUtils.waitForFxEvents();
+        assertEquals("Meran", editField(robot, Field.CITY).getText());
+        assertEquals("DE", editField(robot, Field.COUNTRY_CODE).getText());
+
+        robot.push(KeyCode.CONTROL, KeyCode.Z);
+        WaitForAsyncUtils.waitForFxEvents();
+        assertEquals("", editField(robot, Field.COUNTRY_CODE).getText());
+
+        robot.push(KeyCode.CONTROL, KeyCode.Y);
+        WaitForAsyncUtils.waitForFxEvents();
+        assertEquals("DE", editField(robot, Field.COUNTRY_CODE).getText());
+        assertEquals("Meran", editField(robot, Field.CITY).getText());
+        robot.clickOn("#editCancel");
+    }
+
+    @Test
     void doubleClickOpensTheDialog(FxRobot robot) throws TimeoutException {
         loadTwoImages(robot);
         final MediaFile file = fileNamed(table(robot), "a.jpg");

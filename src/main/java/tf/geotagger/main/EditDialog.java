@@ -33,6 +33,7 @@ import javafx.geometry.Insets;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonBar;
+import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
@@ -41,6 +42,7 @@ import jfxtras.styles.jmetro.JMetro;
 import jfxtras.styles.jmetro.Style;
 import tf.geotagger.model.Field;
 import tf.geotagger.model.MediaFile;
+import tf.helper.javafx.UsefulKeyCodes;
 
 /**
  * Modal dialog to edit the values of the selected files - like GeoSetter's "Edit Data" dialog, see spec, section
@@ -83,6 +85,14 @@ final class EditDialog {
         buttons.setPadding(new Insets(0, 8, 8, 8));
 
         final Scene scene = new Scene(new VBox(details, buttons));
+        // ctrl+z / ctrl+y also for fields already left - the focused field undoes its own typing first
+        scene.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
+            if (UsefulKeyCodes.CNTRL_Z.match(event) && details.undo()) {
+                event.consume();
+            } else if (UsefulKeyCodes.CNTRL_Y.match(event) && details.redo()) {
+                event.consume();
+            }
+        });
         // same look as the main window
         new JMetro(Style.LIGHT).setScene(scene);
         scene.getStylesheets().add(GeoTaggerManager.STYLESHEET);

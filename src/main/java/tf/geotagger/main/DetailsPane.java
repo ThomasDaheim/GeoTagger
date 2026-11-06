@@ -25,9 +25,12 @@
  */
 package tf.geotagger.main;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.SimpleBooleanProperty;
 import javafx.geometry.Bounds;
@@ -80,6 +83,14 @@ public class DetailsPane extends GridPane {
     private final Map<Field, String> errors = new EnumMap<>(Field.class);
     private final BooleanProperty valid = new SimpleBooleanProperty(true);
 
+    // a field the user left with another text - undo / redo across the fields, like the undo of the main window
+    private record FieldEdit(Field field, String before, String after) {
+    }
+    private final Deque<FieldEdit> undoEdits = new ArrayDeque<>();
+    private final Deque<FieldEdit> redoEdits = new ArrayDeque<>();
+    // text of the focused field when it got the focus
+    private final Map<Field, String> textAtFocus = new EnumMap<>(Field.class);
+
     /**
      * Creates the fields - empty and disabled until {@link #setFiles(List)} is called.
      */
@@ -104,8 +115,11 @@ public class DetailsPane extends GridPane {
             text.textProperty().addListener((observable, oldText, newText) -> check(field));
             text.setOnAction(event -> showErrorMessage(field));
             text.focusedProperty().addListener((observable, wasFocused, focused) -> {
-                if (!focused) {
+                if (focused) {
+                    textAtFocus.put(field, text.getText());
+                } else {
                     showErrorMessage(field);
+                    recordEdit(field);
                 }
             });
             textFields.put(field, text);
@@ -132,6 +146,65 @@ public class DetailsPane extends GridPane {
             text.setText(shown);
             // same text as before: no change event
             check(field);
+        }
+        undoEdits.clear();
+        redoEdits.clear();
+        textAtFocus.clear();
+        textFields.forEach((field, text) -> {
+            if (text.isFocused()) {
+                textAtFocus.put(field, text.getText());
+            }
+        });
+    }
+
+    /**
+     * Undoes the last change of a field the user already left. A field that has the focus and was changed handles
+     * ctrl+z itself - then nothing happens here.
+     *
+     * @return false if the focused field should undo its own typing, true otherwise (also if there is nothing to undo)
+     */
+    public boolean undo() {
+        return step(undoEdits, redoEdits, FieldEdit::before);
+    }
+
+    /**
+     * Redoes the last change undone with {@link #undo()}.
+     *
+     * @return false if the focused field should redo its own typing, true otherwise (also if there is nothing to redo)
+     */
+    public boolean redo() {
+        return step(redoEdits, undoEdits, FieldEdit::after);
+    }
+
+    private boolean step(Deque<FieldEdit> from, Deque<FieldEdit> to, Function<FieldEdit, String> text) {
+        final Field focused = focusedField();
+        if (focused != null && !textFields.get(focused).getText().equals(textAtFocus.get(focused))) {
+            return false;
+        }
+        final FieldEdit edit = from.poll();
+        if (edit != null) {
+            textFields.get(edit.field()).setText(text.apply(edit));
+            if (edit.field() == focused) {
+                // the text set here is no typing of the user
+                textAtFocus.put(focused, text.apply(edit));
+            }
+            to.push(edit);
+        }
+        return true;
+    }
+
+    private Field focusedField() {
+        return textFields.entrySet().stream().filter(entry -> entry.getValue().isFocused()).map(Map.Entry::getKey)
+                .findFirst().orElse(null);
+    }
+
+    // the user left the field - a changed text is one step for undo / redo
+    private void recordEdit(Field field) {
+        final String before = textAtFocus.remove(field);
+        final String after = textFields.get(field).getText();
+        if (before != null && !before.equals(after)) {
+            undoEdits.push(new FieldEdit(field, before, after));
+            redoEdits.clear();
         }
     }
 

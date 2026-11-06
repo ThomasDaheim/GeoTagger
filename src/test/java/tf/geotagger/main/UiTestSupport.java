@@ -110,7 +110,12 @@ final class UiTestSupport {
     static void openEditDialog(FxRobot robot) throws TimeoutException {
         // keys go to the focused window - the first test of a run starts without the focus; a click on the status
         // bar changes nothing else
-        robot.clickOn("#statusLabel");
+        final Node status = robot.lookup("#statusLabel").query();
+        robot.clickOn(status);
+        if (!status.getScene().getWindow().isFocused()) {
+            robot.interact(() -> status.getScene().getWindow().requestFocus());
+        }
+        WaitForAsyncUtils.waitFor(5, TimeUnit.SECONDS, () -> status.getScene().getWindow().isFocused());
         robot.push(KeyCode.CONTROL, KeyCode.E);
         waitForEditDialog(robot);
     }
@@ -146,6 +151,15 @@ final class UiTestSupport {
     static void typeInto(FxRobot robot, Field field, String text) {
         final TextField input = editField(robot, field);
         robot.clickOn(input);
+        // the keys must go to this field - right after the dialog opened the click sometimes only activates the window
+        if (!input.isFocused()) {
+            robot.interact(input::requestFocus);
+        }
+        try {
+            WaitForAsyncUtils.waitFor(5, TimeUnit.SECONDS, input::isFocused);
+        } catch (TimeoutException ex) {
+            throw new IllegalStateException(field + " didn't get the focus", ex);
+        }
         robot.interact(input::selectAll);
         robot.write(text);
         WaitForAsyncUtils.waitForFxEvents();
