@@ -118,6 +118,8 @@ public class GeoTagger implements Initializable {
     private static final Field[] PLACE_FIELDS = Field.PLACE_FIELDS.toArray(new Field[0]);
     // extracted previews of RAW / HEIC / videos - emptied when GeoTagger ends
     private static final Path PREVIEW_CACHE = Path.of(System.getProperty("java.io.tmpdir"), "GeoTagger", "preview");
+    // ExifTool uses one CPU core - 4 processes read a folder about three times faster (777 files: 19.3 s -> 6.4 s)
+    private static final int READ_PROCESSES = Math.min(4, Runtime.getRuntime().availableProcessors());
 
     @FXML
     private SplitMenuButton openFolderButton;
@@ -571,7 +573,8 @@ public class GeoTagger implements Initializable {
             final Path executable = Path.of(configured);
             final String version = ExifToolLocator.version(executable);
             exifTool = new ExifTool(executable);
-            reader = new MetadataReader(exifTool);
+            // a folder is read with several ExifTool processes - they exist only while reading
+            reader = new MetadataReader(exifTool, () -> new ExifTool(executable), READ_PROCESSES);
             writer = new MetadataWriter(exifTool, reader);
             previewProvider = new PreviewProvider(exifTool, PREVIEW_CACHE);
             previewPane.setPreviewProvider(previewProvider);

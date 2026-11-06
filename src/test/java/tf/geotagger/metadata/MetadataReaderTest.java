@@ -32,6 +32,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -128,6 +129,50 @@ class MetadataReaderTest {
         assertEquals(files, media.stream().map(MediaFile::path).toList());
         // progress every 50 files - with 100 the status looked like hanging (user feedback)
         assertEquals(List.of(50, 100, 105), progress);
+    }
+
+    @Test
+    void readsInParallelWithExtraProcessesInOrder() throws IOException {
+        final Path first = TestFiles.image(dir, "bild_000.jpg");
+        final List<Path> files = new ArrayList<>(List.of(first));
+        for (int i = 1; i < 105; i++) {
+            files.add(Files.copy(first, dir.resolve(String.format("bild_%03d.jpg", i))));
+        }
+        final AtomicInteger started = new AtomicInteger();
+        final AtomicInteger closed = new AtomicInteger();
+        // 3 processes: the shared one plus 2 extra ones, closed again after reading
+        final MetadataReader parallel = new MetadataReader(exifTool, () -> {
+            started.incrementAndGet();
+            return new ExifTool(ExifToolTestSupport.require()) {
+                @Override
+                public synchronized void close() {
+                    closed.incrementAndGet();
+                    super.close();
+                }
+            };
+        }, 3);
+        final List<Integer> chunkSizes = new ArrayList<>();
+
+        final List<MediaFile> media = parallel.readChunked(files, chunk -> chunkSizes.add(chunk.size()));
+
+        assertEquals(files, media.stream().map(MediaFile::path).toList());
+        // handed over in the order of the files, even if a later chunk is read first
+        assertEquals(List.of(50, 50, 5), chunkSizes);
+        assertEquals(2, started.get());
+        assertEquals(2, closed.get());
+    }
+
+    @Test
+    void singleChunkNeedsNoExtraProcess() throws IOException {
+        final Path file = TestFiles.image(dir, "bild.jpg");
+        final AtomicInteger started = new AtomicInteger();
+        final MetadataReader parallel = new MetadataReader(exifTool, () -> {
+            started.incrementAndGet();
+            return new ExifTool(ExifToolTestSupport.require());
+        }, 4);
+
+        assertEquals(1, parallel.read(List.of(file)).size());
+        assertEquals(0, started.get());
     }
 
     @Test
