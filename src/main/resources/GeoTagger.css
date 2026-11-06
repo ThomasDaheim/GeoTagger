@@ -1,5 +1,10 @@
 /* GeoTagger - on top of JMetro (added after it) */
 
+/* smaller font like GeoSetter - more rows and columns fit */
+.root {
+    -fx-font-size: 11px;
+}
+
 /* values changed but not saved yet - same orange as the markers on the map */
 .table-cell.changed {
     -fx-text-fill: #e07000;

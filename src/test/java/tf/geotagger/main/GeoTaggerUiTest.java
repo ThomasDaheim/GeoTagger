@@ -110,6 +110,12 @@ class GeoTaggerUiTest {
     }
 
     @Test
+    void fontIs11Pixels(FxRobot robot) {
+        assertEquals(11.0, robot.lookup("#statusLabel").queryAs(Label.class).getFont().getSize(), 0.01);
+        assertEquals(11.0, robot.lookup("#mediaTable .column-header .label").queryAs(Label.class).getFont().getSize(), 0.01);
+    }
+
+    @Test
     void imageInfoTabKeepsTheMap(FxRobot robot) throws TimeoutException {
         loadThreeImages(robot);
         UiTestSupport.waitUntilMapReady(controller);
