@@ -64,11 +64,11 @@ public class TrackPointsPane extends VBox {
         table.setId("trackPoints");
         table.setPlaceholder(new Label("Select a loaded track to see its points"));
         table.getColumns().addAll(List.of(
-                column("No.", 45, row -> Integer.toString(row.number())),
+                column("No.", 55,row -> Integer.toString(row.number())),
                 column("Time", 70, row -> row.time() == null ? "" : TIME.format(row.time())),
                 column("Coordinates", 190, row -> FieldText.formatCoordinates(row.position().latitude(), row.position().longitude())),
-                column("Distance", 75, row -> String.format(Locale.ROOT, "%.2f km", row.distanceKm())),
-                column("Elevation", 75, row -> row.elevation() == null ? "" : String.format(Locale.ROOT, "%.1f m", row.elevation()))));
+                column("Distance", 90, row -> String.format(Locale.ROOT, "%.2f km", row.distanceKm())),
+                column("Elevation", 90, row -> row.elevation() == null ? "" : String.format(Locale.ROOT, "%.1f m", row.elevation()))));
         table.getSelectionModel().selectedItemProperty().addListener((observable, oldRow, newRow) -> {
             if (newRow != null) {
                 onPointSelected.accept(newRow.position());

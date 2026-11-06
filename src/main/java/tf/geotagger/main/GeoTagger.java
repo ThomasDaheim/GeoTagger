@@ -71,6 +71,7 @@ import javafx.scene.control.SelectionMode;
 import javafx.scene.control.SplitMenuButton;
 import javafx.scene.control.SplitPane;
 import javafx.scene.control.Tab;
+import javafx.scene.Node;
 import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableRow;
@@ -314,8 +315,7 @@ public class GeoTagger implements Initializable {
         // the values themselves, like GeoSetter - not editable here, see the edit dialog
         valueColumn(coordinatesColumn, file -> FieldText.formatCoordinates(file.latitude(), file.longitude()),
                 Field.LATITUDE, Field.LONGITUDE);
-        valueColumn(altitudeColumn, file -> file.altitude() == null ? "" : FieldText.format(Field.ALTITUDE, file.altitude()) + " m",
-                Field.ALTITUDE);
+        valueColumn(altitudeColumn, file -> FieldText.formatAltitude(file.altitude()), Field.ALTITUDE);
         valueColumn(countryCodeColumn, file -> FieldText.format(Field.COUNTRY_CODE, file.value(Field.COUNTRY_CODE)), Field.COUNTRY_CODE);
         valueColumn(countryColumn, file -> FieldText.format(Field.COUNTRY, file.value(Field.COUNTRY)), Field.COUNTRY);
         valueColumn(stateColumn, file -> FieldText.format(Field.STATE, file.value(Field.STATE)), Field.STATE);
@@ -511,7 +511,8 @@ public class GeoTagger implements Initializable {
         // drag the selected files onto the map
         mediaTable.setOnDragDetected(event -> {
             final List<MediaFile> selected = selectedFiles();
-            if (!selected.isEmpty()) {
+            // only from a file - dragging in the header resizes or moves columns, the scroll bar scrolls
+            if (!selected.isEmpty() && startsOnARow(event.getPickResult().getIntersectedNode())) {
                 final Dragboard dragboard = mediaTable.startDragAndDrop(TransferMode.LINK);
                 final ClipboardContent content = new ClipboardContent();
                 content.put(MapPane.SELECTION_FORMAT, selected.size());
@@ -519,6 +520,21 @@ public class GeoTagger implements Initializable {
                 event.consume();
             }
         });
+    }
+
+    /**
+     * Drag &amp; drop of the selection starts only on a file - in the header a drag resizes or moves the columns.
+     *
+     * @param node node where the drag started
+     * @return true if the node is part of a row with a file
+     */
+    boolean startsOnARow(Node node) {
+        for (Node current = node; current != null && current != mediaTable; current = current.getParent()) {
+            if (current instanceof TableRow<?> row) {
+                return !row.isEmpty();
+            }
+        }
+        return false;
     }
 
     /**

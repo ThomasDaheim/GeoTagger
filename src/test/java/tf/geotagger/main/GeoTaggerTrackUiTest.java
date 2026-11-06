@@ -32,6 +32,8 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import javafx.scene.Node;
+import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
 import javafx.scene.control.TableView;
 import javafx.stage.Stage;
@@ -177,6 +179,38 @@ class GeoTaggerTrackUiTest {
         final TableView<TrackPoints.Row> points = robot.lookup("#trackPoints").queryTableView();
         assertEquals(3, points.getItems().size());
         assertTrue(robot.lookup(".label").match(LabeledMatchers.hasText("3 points")).tryQuery().isPresent());
+    }
+
+    @Test
+    void selectingATrackLoadsItsPoints(FxRobot robot) throws IOException, TimeoutException {
+        loadFolder(robot);
+        final GpxTrack tour = track(robot, "tour.gpx");
+
+        // not checked - only selected
+        robot.interact(() -> trackList(robot).getSelectionModel().select(tour));
+        WaitForAsyncUtils.waitFor(10, TimeUnit.SECONDS, () -> tour.state() == GpxTrack.State.LOADED);
+        WaitForAsyncUtils.waitForFxEvents();
+
+        assertEquals(3, robot.lookup("#trackPoints").queryTableView().getItems().size());
+        // loaded for the points, but not shown on the map
+        assertFalse(tour.shownProperty().get());
+        assertEquals(0, number(js("geoVisibleTrackCount()")));
+    }
+
+    @Test
+    void checkingATrackSelectsIt(FxRobot robot) throws IOException, TimeoutException {
+        loadFolder(robot);
+        final GpxTrack tour = track(robot, "tour.gpx");
+        final Node check = robot.lookup("#trackList .list-cell").queryAllAs(ListCell.class).stream()
+                .filter(cell -> cell.getItem() == tour).findFirst().orElseThrow().getGraphic();
+
+        robot.clickOn(check);
+        WaitForAsyncUtils.waitFor(10, TimeUnit.SECONDS, () -> tour.state() == GpxTrack.State.LOADED);
+        WaitForAsyncUtils.waitForFxEvents();
+
+        assertTrue(tour.shownProperty().get());
+        assertEquals(List.of(tour), List.copyOf(trackList(robot).getSelectionModel().getSelectedItems()));
+        assertEquals(3, robot.lookup("#trackPoints").queryTableView().getItems().size());
     }
 
     @Test

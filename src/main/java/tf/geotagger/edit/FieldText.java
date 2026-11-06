@@ -26,6 +26,7 @@
 package tf.geotagger.edit;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.DateTimeException;
 import java.time.ZoneOffset;
 import java.util.Locale;
@@ -92,6 +93,19 @@ public final class FieldText {
             return "";
         }
         return dms(latitude, 'N', 'S') + "; " + dms(longitude, 'E', 'W');
+    }
+
+    /**
+     * Altitude as shown in the file list - rounded to centimeters so that it fits the column.
+     *
+     * @param altitude altitude in meters, may be null
+     * @return e.g. {@code 233.93 m} - empty for null
+     */
+    public static String formatAltitude(Double altitude) {
+        if (altitude == null) {
+            return "";
+        }
+        return BigDecimal.valueOf(altitude).setScale(2, RoundingMode.HALF_UP).stripTrailingZeros().toPlainString() + " m";
     }
 
     private static String dms(double value, char positive, char negative) {

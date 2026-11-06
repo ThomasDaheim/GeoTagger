@@ -33,6 +33,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import javafx.scene.Node;
 import javafx.scene.control.Label;
 import javafx.scene.control.TabPane;
 import javafx.scene.control.TableColumn;
@@ -108,6 +109,20 @@ class GeoTaggerUiTest {
         }
         robot.interact(() -> controller.loadFolder(dir, false));
         UiTestSupport.waitUntilIdle(controller);
+    }
+
+    @Test
+    void dragAndDropStartsOnlyOnAFile(FxRobot robot) throws TimeoutException {
+        // a drag in the header resizes or moves columns (user feedback: resizing moved the column instead) - checked
+        // without a real drag: the robot sometimes hangs for minutes in the drag & drop loop of Windows
+        loadThreeImages(robot);
+        final Node header = robot.lookup("#mediaTable .column-header").match(node -> "nameColumn".equals(node.getId())).query();
+        final Node headerLabel = robot.from(header).lookup(".label").query();
+        final Node cell = robot.lookup("#mediaTable .table-row-cell .table-cell").query();
+
+        assertFalse(controller.startsOnARow(header));
+        assertFalse(controller.startsOnARow(headerLabel));
+        assertTrue(controller.startsOnARow(cell));
     }
 
     @SuppressWarnings("unchecked")
@@ -192,6 +207,12 @@ class GeoTaggerUiTest {
             // the text actually drawn - a column too narrow shows "..." or nothing
             final Text shown = robot.lookup("#" + header[0] + " .label .text").queryAs(Text.class);
             assertEquals(header[1], shown.getText());
+        }
+        // user feedback: "Code" showed only "..."
+        for (String table : List.of("#mediaTable", "#trackPoints")) {
+            final List<String> shown = robot.lookup(table + " .column-header .label .text").queryAllAs(Text.class).stream()
+                    .map(Text::getText).toList();
+            assertTrue(shown.stream().noneMatch(text -> text.endsWith("...")), table + ": " + shown);
         }
     }
 

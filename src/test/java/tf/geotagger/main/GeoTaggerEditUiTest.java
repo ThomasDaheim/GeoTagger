@@ -208,6 +208,20 @@ class GeoTaggerEditUiTest {
     }
 
     @Test
+    void ctrlZUndoesTypingInTheDialog(FxRobot robot) throws TimeoutException {
+        loadTwoImages(robot);
+        select(robot, "a.jpg");
+        openEditDialog(robot);
+        typeInto(robot, Field.CITY, "Bozen");
+
+        robot.push(KeyCode.CONTROL, KeyCode.Z);
+        WaitForAsyncUtils.waitForFxEvents();
+
+        assertEquals("Meran", editField(robot, Field.CITY).getText());
+        robot.clickOn("#editCancel");
+    }
+
+    @Test
     void doubleClickOpensTheDialog(FxRobot robot) throws TimeoutException {
         loadTwoImages(robot);
         final MediaFile file = fileNamed(table(robot), "a.jpg");

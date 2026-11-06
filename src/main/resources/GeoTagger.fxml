@@ -63,7 +63,7 @@
                             <TableColumn fx:id="captureTimeColumn" text="Capture time" prefWidth="150"/>
                             <TableColumn fx:id="coordinatesColumn" text="Coordinates" prefWidth="190"/>
                             <TableColumn fx:id="altitudeColumn" text="Altitude" prefWidth="90"/>
-                            <TableColumn fx:id="countryCodeColumn" text="Code" prefWidth="50"/>
+                            <TableColumn fx:id="countryCodeColumn" text="Code" prefWidth="65"/>
                             <TableColumn fx:id="countryColumn" text="Country" prefWidth="110"/>
                             <TableColumn fx:id="stateColumn" text="State" prefWidth="110"/>
                             <TableColumn fx:id="cityColumn" text="City" prefWidth="110"/>

@@ -49,6 +49,7 @@ import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.Tooltip;
+import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
@@ -113,6 +114,11 @@ public class TrackListPane extends VBox {
     }
 
     private void selectionChanged() {
+        // the points of a selected track are shown - load it if needed, without showing it on the map
+        trackList.getSelectionModel().getSelectedItems().stream()
+                .filter(track -> track != null && track.state() == GpxTrack.State.NOT_LOADED)
+                .toList()
+                .forEach(this::load);
         onSelectionChanged.accept(trackList.getSelectionModel().getSelectedItems().stream()
                 .filter(Objects::nonNull)
                 .filter(track -> track.state() == GpxTrack.State.LOADED)
@@ -272,6 +278,19 @@ public class TrackListPane extends VBox {
     private static final class TrackCell extends ListCell<GpxTrack> {
         private final CheckBox check = new CheckBox();
         private GpxTrack bound;
+
+        TrackCell() {
+            // checking a track selects it as well, so that its points are shown - with ctrl added to the selection
+            check.addEventFilter(MouseEvent.MOUSE_PRESSED, event -> {
+                if (getListView() != null && !isEmpty()) {
+                    if (event.isShortcutDown()) {
+                        getListView().getSelectionModel().select(getIndex());
+                    } else {
+                        getListView().getSelectionModel().clearAndSelect(getIndex());
+                    }
+                }
+            });
+        }
 
         @Override
         protected void updateItem(GpxTrack track, boolean empty) {

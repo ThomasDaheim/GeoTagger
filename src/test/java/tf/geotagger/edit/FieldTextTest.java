@@ -82,6 +82,15 @@ class FieldTextTest {
     }
 
     @Test
+    void formatsAltitudeForTheListWithTwoDecimals() {
+        assertEquals("233.93 m", FieldText.formatAltitude(233.93394));
+        assertEquals("236.9 m", FieldText.formatAltitude(236.9));
+        assertEquals("1000 m", FieldText.formatAltitude(1000.0));
+        assertEquals("-0.01 m", FieldText.formatAltitude(-0.005));
+        assertEquals("", FieldText.formatAltitude(null));
+    }
+
+    @Test
     void parsesDegreesWithHemisphere() {
         assertEquals(48.1372, (Double) FieldText.parse(Field.LATITUDE, "48.1372° N"), 1e-9);
         assertEquals(48 + 8 / 60.0 + 14 / 3600.0, (Double) FieldText.parse(Field.LATITUDE, "48° 08′ 14″ N"), 1e-9);
