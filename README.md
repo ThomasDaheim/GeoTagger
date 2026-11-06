@@ -15,7 +15,7 @@ All metadata is read and written with [ExifTool](https://exiftool.org) - one lon
 
 Work in progress. Available so far:
 
-* open a folder (optionally with subfolders), recently used folders
+* open a folder (optionally with subfolders), recently used folders - the list fills while the metadata is read
 * file list with filters (without coordinates / place / altitude, changed) and status columns
 * preview with navigation and "100 %" mode - RAW files and videos show their embedded preview
 * details: edit coordinates, altitude, place fields and time zone - also for several files at once
@@ -24,8 +24,9 @@ Work in progress. Available so far:
 * image info: all tags of the selected file as ExifTool reports them
 * map (Leaflet via [GeoHelper](https://github.com/ThomasDaheim/GeoHelper)) with clustered markers - saved positions blue, changed ones orange, selected files red
   * set positions by dragging files from the list onto the map, by "Set position of n files here" (right click) or by dragging a selected marker
-  * clicking a marker selects its file
+  * clicking a marker selects its file, Ctrl + drag selects all files in the rectangle (with Shift: added to the selection)
 * track list: GPX files of the folder, check to load and show them on the map, "+ GPX" for files from elsewhere
+  * colours from the GPX file (gpx_style or Garmin DisplayColor), each segment as its own line
 * GPX reading and track sync logic (the sync dialog follows)
 
 Planned next: geo services (reverse geocoding, altitude, time zone) and the track sync dialog.
