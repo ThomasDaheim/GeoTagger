@@ -14,6 +14,9 @@
 <?import javafx.scene.control.TableColumn?>
 <?import javafx.scene.control.TableView?>
 <?import javafx.scene.control.ToolBar?>
+<?import javafx.scene.control.Tooltip?>
+<?import javafx.scene.image.Image?>
+<?import javafx.scene.image.ImageView?>
 <?import javafx.scene.layout.BorderPane?>
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.VBox?>
@@ -30,8 +33,15 @@
             <CheckBox fx:id="includeSubfoldersCheck" text="Include subfolders"/>
             <Separator orientation="VERTICAL"/>
             <Button fx:id="saveButton" text="Save" onAction="#save" disable="true"/>
-            <Button fx:id="undoButton" text="Undo" onAction="#undo" disable="true"/>
-            <Button fx:id="redoButton" text="Redo" onAction="#redo" disable="true"/>
+            <!-- icons from GPXEditor -->
+            <Button fx:id="undoButton" onAction="#undo" disable="true">
+                <graphic><ImageView><Image url="@/undo.png"/></ImageView></graphic>
+                <tooltip><Tooltip text="Undo (Ctrl+Z)"/></tooltip>
+            </Button>
+            <Button fx:id="redoButton" onAction="#redo" disable="true">
+                <graphic><ImageView><Image url="@/redo.png"/></ImageView></graphic>
+                <tooltip><Tooltip text="Redo (Ctrl+Y)"/></tooltip>
+            </Button>
             <Separator orientation="VERTICAL"/>
             <Button fx:id="preferencesButton" text="Preferences..." onAction="#showPreferences"/>
         </ToolBar>

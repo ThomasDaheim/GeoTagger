@@ -33,6 +33,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import javafx.scene.control.Button;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
@@ -147,6 +148,17 @@ class GeoTaggerEditUiTest {
 
     private static TextField detailsField(FxRobot robot, Field field) {
         return robot.lookup("#details-" + field.name()).queryAs(TextField.class);
+    }
+
+    @Test
+    void undoAndRedoShowIcons(FxRobot robot) {
+        for (String id : List.of("#undoButton", "#redoButton")) {
+            final Button button = robot.lookup(id).queryButton();
+            assertTrue(button.getText() == null || button.getText().isEmpty(), id);
+            assertTrue(button.getGraphic() instanceof ImageView view && view.getImage() != null && !view.getImage().isError(), id);
+            assertTrue(button.getTooltip() != null
+                    && button.getTooltip().getText().startsWith("#undoButton".equals(id) ? "Undo" : "Redo"), id);
+        }
     }
 
     @Test
