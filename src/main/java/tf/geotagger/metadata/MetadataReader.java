@@ -50,6 +50,9 @@ import tf.geotagger.model.Snapshot;
 public class MetadataReader {
     // 50: the progress moves often enough not to look like hanging, the ExifTool calls stay few
     static final int CHUNK_SIZE = 50;
+    // skips maker notes and trailers - none of the ReadTags is stored there; measured on 777 photos and videos of a
+    // Canon EOS and a Pixel: 127 s without, 19.5 s with "-fast2", same values
+    private static final List<String> READ_OPTIONS = List.of("-fast2");
 
     private final ExifTool exifTool;
 
@@ -93,13 +96,13 @@ public class MetadataReader {
     }
 
     private List<MediaFile> readChunk(List<Path> chunk) {
-        final Map<Path, Map<String, Object>> entries = byPath(exifTool.readJson(chunk, ReadTag.keys()));
+        final Map<Path, Map<String, Object>> entries = byPath(exifTool.readJson(chunk, ReadTag.keys(), READ_OPTIONS));
         final List<Path> sidecars = chunk.stream()
                 .filter(file -> FormatProfile.of(file).orElseThrow() == FormatProfile.SIDECAR)
                 .map(FormatProfile::sidecarFor)
                 .filter(Files::isRegularFile)
                 .toList();
-        final Map<Path, Map<String, Object>> sidecarEntries = byPath(exifTool.readJson(sidecars, ReadTag.keys()));
+        final Map<Path, Map<String, Object>> sidecarEntries = byPath(exifTool.readJson(sidecars, ReadTag.keys(), READ_OPTIONS));
 
         final List<MediaFile> files = new ArrayList<>(chunk.size());
         for (Path file : chunk) {
