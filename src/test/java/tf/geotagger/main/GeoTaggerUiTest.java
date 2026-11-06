@@ -28,6 +28,7 @@ package tf.geotagger.main;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -107,6 +108,25 @@ class GeoTaggerUiTest {
         }
         robot.interact(() -> controller.loadFolder(dir, false));
         UiTestSupport.waitUntilIdle(controller);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Comparator<Object> comparator(FxRobot robot, String columnId) {
+        final TableView<MediaFile> table = robot.lookup("#mediaTable").queryTableView();
+        return (Comparator<Object>) table.getColumns().stream().filter(column -> columnId.equals(column.getId()))
+                .findFirst().orElseThrow().getComparator();
+    }
+
+    @Test
+    void valueColumnsSortByTheirValue(FxRobot robot) {
+        final Comparator<Object> altitude = comparator(robot, "altitudeColumn");
+        assertTrue(altitude.compare("250 m", "1000 m") < 0);
+        assertTrue(altitude.compare("-5 m", "250 m") < 0);
+        assertTrue(altitude.compare("", "-5 m") < 0);
+        final Comparator<Object> coordinates = comparator(robot, "coordinatesColumn");
+        assertTrue(coordinates.compare("S10°0'0.00\"; E1°0'0.00\"", "N5°0'0.00\"; E1°0'0.00\"") < 0);
+        assertTrue(coordinates.compare("N5°0'0.00\"; W1°0'0.00\"", "N5°0'0.00\"; E1°0'0.00\"") < 0);
+        assertTrue(coordinates.compare("", "S10°0'0.00\"; E1°0'0.00\"") < 0);
     }
 
     @Test

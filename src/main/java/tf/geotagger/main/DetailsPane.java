@@ -151,18 +151,23 @@ public class DetailsPane extends GridPane {
         final Map<Field, Object> changes = new EnumMap<>(Field.class);
         for (Field field : Field.values()) {
             final String text = textFields.get(field).getText();
-            if (!text.equals(shownTexts.get(field)) && !errors.containsKey(field)) {
+            if (isChanged(field, text) && !errors.containsKey(field)) {
                 changes.put(field, FieldText.parse(field, text));
             }
         }
         return changes;
     }
 
+    // blanks around the text don't count - otherwise a space in a "(different)" field would delete the values
+    private boolean isChanged(Field field, String text) {
+        return !text.trim().equals(shownTexts.get(field));
+    }
+
     private void check(Field field) {
         final TextField text = textFields.get(field);
         hideErrorMessage(text);
         String error = null;
-        if (!text.getText().equals(shownTexts.get(field))) {
+        if (isChanged(field, text.getText())) {
             try {
                 FieldText.parse(field, text.getText());
             } catch (IllegalArgumentException ex) {

@@ -7,6 +7,10 @@
 
 /* values changed but not saved yet - same orange as the markers on the map */
 .table-cell.changed {
-    -fx-text-fill: #e07000;
     -fx-font-weight: bold;
+}
+
+/* JMetro colours the text node of the cells (.table-cell .text) - selected rows keep JMetro's colour */
+.table-cell.changed .text {
+    -fx-fill: #e07000;
 }

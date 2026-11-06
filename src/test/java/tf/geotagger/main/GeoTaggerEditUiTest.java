@@ -42,6 +42,8 @@ import javafx.scene.control.TextField;
 import javafx.scene.control.Tooltip;
 import javafx.scene.image.ImageView;
 import javafx.scene.input.KeyCode;
+import javafx.scene.paint.Color;
+import javafx.scene.text.Text;
 import javafx.stage.Stage;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
@@ -289,6 +291,35 @@ class GeoTaggerEditUiTest {
         assertEquals("Bozen", table(robot).getColumns().stream().filter(column -> "cityColumn".equals(column.getId()))
                 .findFirst().orElseThrow().getCellData(file));
         assertEquals("Save (1)", robot.lookup("#saveButton").queryButton().getText());
+    }
+
+    @Test
+    void changedCellsAreOrange(FxRobot robot) throws TimeoutException {
+        loadTwoImages(robot);
+        final MediaFile file = select(robot, "a.jpg");
+        edit(robot, Map.of(Field.CITY, "Bozen"));
+        // not selected - selected rows have their own colours
+        select(robot, "b.jpg");
+        WaitForAsyncUtils.waitForFxEvents();
+
+        final TableCell<?, ?> cell = robot.lookup(".table-cell").queryAllAs(TableCell.class).stream()
+                .filter(candidate -> candidate.getTableColumn() != null && "cityColumn".equals(candidate.getTableColumn().getId()))
+                .filter(candidate -> candidate.getTableRow() != null && candidate.getTableRow().getItem() == file)
+                .findFirst().orElseThrow();
+        assertEquals(Color.web("#e07000"), ((Text) cell.lookup(".text")).getFill());
+    }
+
+    @Test
+    void blankInputInADifferentFieldChangesNothing(FxRobot robot) throws TimeoutException {
+        loadTwoImages(robot);
+        final TableView<MediaFile> table = table(robot);
+        robot.interact(() -> table.getSelectionModel().selectAll());
+
+        // City is "Meran" and empty - the field shows "(different)"; a typed space must not delete "Meran"
+        edit(robot, Map.of(Field.CITY, " "));
+
+        assertEquals("Meran", fileNamed(table, "a.jpg").value(Field.CITY));
+        assertTrue(robot.lookup("#undoButton").queryButton().isDisabled());
     }
 
     @Test

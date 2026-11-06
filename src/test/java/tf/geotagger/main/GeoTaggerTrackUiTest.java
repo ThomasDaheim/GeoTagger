@@ -195,6 +195,21 @@ class GeoTaggerTrackUiTest {
     }
 
     @Test
+    void updatingThePointsKeepsTheMap(FxRobot robot) throws IOException, TimeoutException {
+        loadFolder(robot);
+        final GpxTrack tour = selectLoadedTour(robot);
+        final TableView<TrackPoints.Row> points = robot.lookup("#trackPoints").queryTableView();
+        robot.interact(() -> points.getSelectionModel().select(2));
+        js("myMap.setView([40.0, 5.0], 8, {animate: false})");
+
+        // the selection of the tracks changes - the list of points is filled again
+        robot.interact(() -> trackList(robot).getSelectionModel().clearAndSelect(trackList(robot).getItems().indexOf(tour)));
+        WaitForAsyncUtils.waitForFxEvents();
+
+        assertEquals(40.0, ((Number) js("myMap.getCenter().lat")).doubleValue(), 0.1);
+    }
+
+    @Test
     void unreadableGpxIsMarked(FxRobot robot) throws IOException, TimeoutException {
         loadFolder(robot);
         final GpxTrack broken = track(robot, "broken.gpx");

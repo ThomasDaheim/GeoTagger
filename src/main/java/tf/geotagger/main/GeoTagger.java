@@ -33,6 +33,7 @@ import java.nio.file.Path;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -321,6 +322,24 @@ public class GeoTagger implements Initializable {
         valueColumn(cityColumn, file -> FieldText.format(Field.CITY, file.value(Field.CITY)), Field.CITY);
         valueColumn(sublocationColumn, file -> FieldText.format(Field.SUBLOCATION, file.value(Field.SUBLOCATION)), Field.SUBLOCATION);
         valueColumn(timeOffsetColumn, file -> FieldText.format(Field.TIME_OFFSET, file.value(Field.TIME_OFFSET)), Field.TIME_OFFSET);
+        // sorted by value, not by text - empty cells first
+        altitudeColumn.setComparator(Comparator.comparing(GeoTagger::altitudeValue, Comparator.nullsFirst(Comparator.naturalOrder())));
+        coordinatesColumn.setComparator(Comparator.comparing(GeoTagger::latitudeValue, Comparator.nullsFirst(Comparator.naturalOrder()))
+                .thenComparing(GeoTagger::longitudeValue, Comparator.nullsFirst(Comparator.naturalOrder())));
+    }
+
+    // "512.4 m" -> 512.4, null for an empty cell
+    private static Double altitudeValue(String text) {
+        return text == null || text.isBlank() ? null : (Double) FieldText.parse(Field.ALTITUDE, text.replace(" m", ""));
+    }
+
+    // first part of "N46°40'48.05"; E11°5'28.61"", null for an empty cell
+    private static Double latitudeValue(String text) {
+        return text == null || text.isBlank() ? null : (Double) FieldText.parse(Field.LATITUDE, text.split("; ")[0]);
+    }
+
+    private static Double longitudeValue(String text) {
+        return text == null || text.isBlank() ? null : (Double) FieldText.parse(Field.LONGITUDE, text.split("; ")[1]);
     }
 
     // a column showing a value - its cell is marked when one of the fields has a pending change
