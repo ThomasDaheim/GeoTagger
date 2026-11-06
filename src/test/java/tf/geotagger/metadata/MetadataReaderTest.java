@@ -131,6 +131,21 @@ class MetadataReaderTest {
     }
 
     @Test
+    void chunksAreHandedOverWhileReading() throws IOException {
+        final Path first = TestFiles.image(dir, "bild_000.jpg");
+        final List<Path> files = new ArrayList<>(List.of(first));
+        for (int i = 1; i < 105; i++) {
+            files.add(Files.copy(first, dir.resolve(String.format("bild_%03d.jpg", i))));
+        }
+        final List<Integer> chunkSizes = new ArrayList<>();
+
+        final List<MediaFile> media = reader.readChunked(files, chunk -> chunkSizes.add(chunk.size()));
+
+        assertEquals(List.of(50, 50, 5), chunkSizes);
+        assertEquals(files, media.stream().map(MediaFile::path).toList());
+    }
+
+    @Test
     void sidecarValuesOverlayTheMediaFile() throws IOException {
         final Path video = Files.write(dir.resolve("clip.avi"), new byte[] {1, 2, 3, 4});
         exifTool.execute(List.of("-XMP-photoshop:City=Rom", "-XMP-exif:GPSLatitude#=41.9", "-o",

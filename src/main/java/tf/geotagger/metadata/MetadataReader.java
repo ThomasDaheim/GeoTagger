@@ -36,6 +36,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Consumer;
 import java.util.function.IntConsumer;
 import tf.exiftool.ExifTool;
 import tf.geotagger.model.Field;
@@ -66,11 +67,27 @@ public class MetadataReader {
      * @return the read files in the order of files
      */
     public List<MediaFile> read(List<Path> files, IntConsumer progress) {
+        final List<MediaFile> result = new ArrayList<>();
+        return readChunked(files, chunk -> {
+            result.addAll(chunk);
+            progress.accept(result.size());
+        });
+    }
+
+    /**
+     * Reads chunk by chunk and hands each chunk over right away - e.g. to fill the file list while reading.
+     *
+     * @param files files to read - files without a FormatProfile are ignored
+     * @param chunkRead gets the files of each chunk once it is read (called on the reading thread)
+     * @return the read files in the order of files
+     */
+    public List<MediaFile> readChunked(List<Path> files, Consumer<List<MediaFile>> chunkRead) {
         final List<Path> supported = files.stream().filter(file -> FormatProfile.of(file).isPresent()).toList();
         final List<MediaFile> result = new ArrayList<>(supported.size());
         for (int start = 0; start < supported.size(); start += CHUNK_SIZE) {
-            result.addAll(readChunk(supported.subList(start, Math.min(start + CHUNK_SIZE, supported.size()))));
-            progress.accept(result.size());
+            final List<MediaFile> chunk = readChunk(supported.subList(start, Math.min(start + CHUNK_SIZE, supported.size())));
+            result.addAll(chunk);
+            chunkRead.accept(List.copyOf(chunk));
         }
         return result;
     }

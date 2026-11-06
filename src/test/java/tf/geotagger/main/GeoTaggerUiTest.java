@@ -26,6 +26,7 @@
 package tf.geotagger.main;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -142,6 +143,29 @@ class GeoTaggerUiTest {
                 .filter(column -> "coordinatesStatusColumn".equals(column.getId())).findFirst().orElseThrow();
         assertEquals("✓", gpsColumn.getCellData(fileNamed(table, "a.jpg")));
         assertEquals("–", gpsColumn.getCellData(fileNamed(table, "b.jpg")));
+    }
+
+    @Test
+    void loadingTwiceKeepsOnlyTheSecondFolder(FxRobot robot) throws IOException, TimeoutException, InterruptedException {
+        final Path first = Files.createDirectory(dir.resolve("first"));
+        final Path second = Files.createDirectory(dir.resolve("second"));
+        for (int i = 0; i < 120; i++) {
+            TestFiles.image(first, String.format("f%03d.jpg", i));
+        }
+        TestFiles.image(second, "s.jpg");
+        final TableView<MediaFile> table = robot.lookup("#mediaTable").queryTableView();
+
+        robot.interact(() -> {
+            controller.loadFolder(first, false);
+            controller.loadFolder(second, false);
+        });
+        WaitForAsyncUtils.waitFor(30, TimeUnit.SECONDS, () -> !controller.isBusy()
+                && table.getItems().stream().anyMatch(file -> file.path().getFileName().toString().equals("s.jpg")));
+        // late chunks of the first folder would arrive now
+        Thread.sleep(500);
+        WaitForAsyncUtils.waitForFxEvents();
+
+        assertEquals(List.of("s.jpg"), table.getItems().stream().map(file -> file.path().getFileName().toString()).toList());
     }
 
     @Test

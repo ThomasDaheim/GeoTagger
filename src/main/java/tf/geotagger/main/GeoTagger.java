@@ -42,6 +42,7 @@ import java.util.Optional;
 import java.util.ResourceBundle;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 import javafx.application.Platform;
@@ -186,6 +187,8 @@ public class GeoTagger implements Initializable {
     private volatile boolean busy = false;
     // true while refreshFiles() restores the selection - the selection listeners ignore that
     private boolean restoringSelection = false;
+    // counts loadFolder calls - results of an older one are dropped
+    private int loadGeneration = 0;
     // DoUndoManager is a singleton - its listener is removed in stop(), otherwise it keeps this window alive
     private final ChangeListener<Number> undoListener = (observable, oldValue, newValue) -> updateButtons();
     private ExifTool exifTool;
@@ -642,6 +645,14 @@ public class GeoTagger implements Initializable {
     // UI tests load folders this way instead of through the native folder dialog
     void loadFolder(Path newFolder, boolean includeSubfolders) {
         final MetadataReader folderReader = reader;
+        // a newer loadFolder makes the results of this one obsolete - e.g. chunks still on their way
+        final int generation = ++loadGeneration;
+        // the old folder is saved or discarded by now (asked before) - the list fills with the new one while reading
+        DoUndoManager.getInstance().clear(undoKey());
+        folder = newFolder;
+        DoUndoManager.getInstance().clear(undoKey());
+        files.clear();
+        refreshFiles();
         // found in the background, shown in the track list when loading succeeded
         final AtomicReference<List<Path>> gpxFiles = new AtomicReference<>(List.of());
         final Task<List<MediaFile>> task = new Task<>() {
@@ -653,18 +664,27 @@ public class GeoTagger implements Initializable {
                 final List<Path> mediaFiles = scan.mediaFiles();
                 final int total = mediaFiles.size();
                 updateProgress(0, total);
-                return folderReader.read(mediaFiles, done -> {
-                    updateProgress(done, total);
-                    updateMessage("Reading metadata: " + done + " / " + total);
+                final AtomicInteger done = new AtomicInteger();
+                return folderReader.readChunked(mediaFiles, chunk -> {
+                    updateProgress(done.addAndGet(chunk.size()), total);
+                    updateMessage("Reading metadata: " + done.get() + " / " + total);
+                    // shown right away - like GeoSetter
+                    Platform.runLater(() -> {
+                        if (generation == loadGeneration) {
+                            files.addAll(chunk);
+                            refreshFiles();
+                        }
+                    });
                 });
             }
         };
         task.setOnSucceeded(event -> {
+            if (generation != loadGeneration) {
+                // another folder was opened meanwhile
+                return;
+            }
             finishTask();
-            // the undo history belongs to the files of a folder
-            DoUndoManager.getInstance().clear(undoKey());
-            folder = newFolder;
-            DoUndoManager.getInstance().clear(undoKey());
+            // the chunks are all shown already - set again in case one is still on its way
             files.setAll(task.getValue());
             refreshFiles();
             mapPane.fitToFiles(files);
@@ -676,7 +696,13 @@ public class GeoTagger implements Initializable {
             select(0);
         });
         task.setOnFailed(event -> {
+            if (generation != loadGeneration) {
+                return;
+            }
             finishTask();
+            // no half folder
+            files.clear();
+            refreshFiles();
             statusLabel.setText("Loading " + newFolder + " failed");
             ShowAlerts.getInstance().showAlert(Alert.AlertType.ERROR, GeoTaggerManager.TITLE, "Can't load " + newFolder,
                     String.valueOf(task.getException().getMessage()));
