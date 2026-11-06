@@ -136,18 +136,26 @@ public class MapPane extends StackPane {
             }
         });
         webView.setOnDragDropped(event -> {
-            boolean done = false;
-            if (event.getDragboard().hasContent(SELECTION_FORMAT)) {
-                final List<MediaFile> files = selection.get();
-                final LatLon position = mapView.latLonAt(event.getX(), event.getY()).orElse(null);
-                if (position != null && !files.isEmpty()) {
-                    onSetPosition.accept(files, position);
-                    done = true;
-                }
-            }
-            event.setDropCompleted(done);
+            event.setDropCompleted(event.getDragboard().hasContent(SELECTION_FORMAT) && dropSelectionAt(event.getX(), event.getY()));
             event.consume();
         });
+    }
+
+    /**
+     * The selected files get the position at this point of the map - what a drop from the file list does.
+     *
+     * @param x x relative to the WebView
+     * @param y y relative to the WebView
+     * @return true if positions were set - false without selection or while the map isn't ready
+     */
+    boolean dropSelectionAt(double x, double y) {
+        final List<MediaFile> files = selection.get();
+        final LatLon position = mapView.latLonAt(x, y).orElse(null);
+        if (position == null || files.isEmpty()) {
+            return false;
+        }
+        onSetPosition.accept(files, position);
+        return true;
     }
 
     /**

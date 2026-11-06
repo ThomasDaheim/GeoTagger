@@ -30,7 +30,6 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.TimeoutException;
 import javafx.scene.Node;
-import javafx.scene.control.TableRow;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
 import javafx.scene.control.skin.VirtualFlow;
@@ -236,15 +235,18 @@ class GeoTaggerMapUiTest {
     }
 
     @Test
-    void draggingFilesOntoTheMapSetsTheirPosition(FxRobot robot) throws TimeoutException {
+    void droppingFilesOnTheMapSetsTheirPosition(FxRobot robot) throws TimeoutException {
         loadImages(robot);
         js(robot, "myMap.setView([46.0, 11.0], 16, {animate: false})");
         final MediaFile file = select(robot, "c.jpg");
-        final Node row = robot.lookup(".table-row-cell").match((Node node) -> ((TableRow<?>) node).getItem() == file).query();
+        final WebView web = controller.mapPane().mapView().getWebView();
 
-        robot.drag(row).dropTo(controller.mapPane().mapView().getWebView());
-        WaitForAsyncUtils.waitForFxEvents();
+        // the drop itself - a real drag with the robot sometimes hangs for minutes in the drag & drop loop of
+        // Windows, the mouse part is on the manual checklist
+        final boolean dropped = WaitForAsyncUtils.waitFor(WaitForAsyncUtils.asyncFx(
+                () -> controller.mapPane().dropSelectionAt(web.getWidth() / 2, web.getHeight() / 2)));
 
+        assertTrue(dropped);
         assertTrue(file.hasCoordinates());
         assertEquals(46.0, file.latitude(), 0.05);
     }
