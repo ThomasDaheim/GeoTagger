@@ -148,22 +148,23 @@ public final class GpxReader {
         for (Trk track : nullToEmpty(content.tracks())) {
             final String color = color(track.extensions());
             for (Trkseg segment : nullToEmpty(track.segments())) {
-                final List<LatLon> positions = new ArrayList<>();
+                final List<GpxPoint> linePoints = new ArrayList<>();
                 for (Trkpt point : nullToEmpty(segment.points())) {
                     if (point.latitude() == null || point.longitude() == null) {
                         continue;
                     }
                     final Instant time = toInstant(point.time());
+                    final Double elevation = toDouble(point.elevation());
                     if (time != null) {
-                        points.add(new TrackPoint(time, point.latitude(), point.longitude(), toDouble(point.elevation())));
+                        points.add(new TrackPoint(time, point.latitude(), point.longitude(), elevation));
                     }
                     // the format is checked, not the range - such a point would break the map
                     if (Math.abs(point.latitude()) <= 90 && Math.abs(point.longitude()) <= 180) {
-                        positions.add(new LatLon(point.latitude(), point.longitude()));
+                        linePoints.add(new GpxPoint(new LatLon(point.latitude(), point.longitude()), time, elevation));
                     }
                 }
-                if (!positions.isEmpty()) {
-                    lines.add(new GpxLine(List.copyOf(positions), color));
+                if (!linePoints.isEmpty()) {
+                    lines.add(new GpxLine(List.copyOf(linePoints), color));
                 }
             }
         }

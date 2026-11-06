@@ -31,19 +31,25 @@ import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.Consumer;
 import javafx.application.Platform;
 import javafx.beans.Observable;
 import javafx.collections.FXCollections;
+import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
+import javafx.geometry.Pos;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
+import javafx.scene.control.SelectionMode;
 import javafx.scene.control.Tooltip;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
@@ -70,20 +76,51 @@ public class TrackListPane extends VBox {
         thread.setDaemon(true);
         return thread;
     });
+    private final Label count = new Label();
     private MapPane map;
     private int nextColor = 0;
+    private Consumer<List<GpxTrack>> onSelectionChanged = selected -> {};
 
+    /**
+     * Creates the empty list.
+     */
     public TrackListPane() {
         setSpacing(4);
         setPadding(new Insets(4));
         trackList.setId("trackList");
         trackList.setPlaceholder(new Label("No GPX files"));
         trackList.setCellFactory(list -> new TrackCell());
+        trackList.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
+        trackList.getSelectionModel().getSelectedItems().addListener((ListChangeListener<GpxTrack>) change -> selectionChanged());
+        // a track finished loading - its points can be shown now
+        tracks.addListener((ListChangeListener<GpxTrack>) change -> updateCount());
         VBox.setVgrow(trackList, Priority.ALWAYS);
         final Button addGpxButton = new Button("+ GPX");
         addGpxButton.setId("addGpxButton");
         addGpxButton.setOnAction(event -> chooseGpxFiles());
-        getChildren().addAll(trackList, addGpxButton);
+        count.setId("trackCount");
+        final HBox bottom = new HBox(8, addGpxButton, count);
+        bottom.setAlignment(Pos.CENTER_LEFT);
+        getChildren().addAll(trackList, bottom);
+        updateCount();
+    }
+
+    /**
+     * @param handler called with the loaded tracks among the selected ones whenever they change
+     */
+    void setOnSelectionChanged(Consumer<List<GpxTrack>> handler) {
+        onSelectionChanged = Objects.requireNonNull(handler);
+    }
+
+    private void selectionChanged() {
+        onSelectionChanged.accept(trackList.getSelectionModel().getSelectedItems().stream()
+                .filter(Objects::nonNull)
+                .filter(track -> track.state() == GpxTrack.State.LOADED)
+                .toList());
+    }
+
+    private void updateCount() {
+        count.setText(tracks.size() + " GPX files (" + loadedTracks().size() + " loaded)");
     }
 
     /**
@@ -201,6 +238,9 @@ public class TrackListPane extends VBox {
             track.loaded(content);
         } else {
             track.failed(failure);
+        }
+        if (trackList.getSelectionModel().getSelectedItems().contains(track)) {
+            selectionChanged();
         }
         if (track.state() != GpxTrack.State.LOADED) {
             track.shownProperty().set(false);

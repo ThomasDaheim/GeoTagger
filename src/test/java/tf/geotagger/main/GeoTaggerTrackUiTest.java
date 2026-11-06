@@ -33,6 +33,7 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import javafx.scene.control.ListView;
+import javafx.scene.control.TableView;
 import javafx.stage.Stage;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
@@ -48,6 +49,7 @@ import org.testfx.util.WaitForAsyncUtils;
 import tf.geotagger.metadata.ExifToolTestSupport;
 import tf.geotagger.metadata.TestFiles;
 import tf.geotagger.track.GpxTrack;
+import tf.geotagger.track.TrackPoints;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -155,6 +157,41 @@ class GeoTaggerTrackUiTest {
         WaitForAsyncUtils.waitForFxEvents();
         final String id = "'" + tour.id().replace("\\", "\\\\") + "'";
         assertEquals("#0000FF", js("geoTracks[" + id + "].getLayers()[0].options.color"));
+    }
+
+    // checks tour.gpx, waits until it is loaded and selects it in the list
+    private GpxTrack selectLoadedTour(FxRobot robot) throws TimeoutException {
+        final GpxTrack tour = track(robot, "tour.gpx");
+        robot.interact(() -> tour.shownProperty().set(true));
+        WaitForAsyncUtils.waitFor(10, TimeUnit.SECONDS, () -> tour.state() == GpxTrack.State.LOADED);
+        robot.interact(() -> trackList(robot).getSelectionModel().select(tour));
+        WaitForAsyncUtils.waitForFxEvents();
+        return tour;
+    }
+
+    @Test
+    void selectedTracksShowTheirPoints(FxRobot robot) throws IOException, TimeoutException {
+        loadFolder(robot);
+        selectLoadedTour(robot);
+
+        final TableView<TrackPoints.Row> points = robot.lookup("#trackPoints").queryTableView();
+        assertEquals(3, points.getItems().size());
+        assertTrue(robot.lookup(".label").match(LabeledMatchers.hasText("3 points")).tryQuery().isPresent());
+    }
+
+    @Test
+    void selectingAPointCentersTheMap(FxRobot robot) throws IOException, TimeoutException {
+        loadFolder(robot);
+        selectLoadedTour(robot);
+        final TableView<TrackPoints.Row> points = robot.lookup("#trackPoints").queryTableView();
+
+        robot.interact(() -> points.getSelectionModel().select(2));
+        WaitForAsyncUtils.waitForFxEvents();
+
+        // in pixels: Leaflet keeps the map on whole pixels - at a low zoom getCenter() is up to half a pixel (~0.01°) off
+        final String point = "myMap.latLngToContainerPoint([46.52, 11.52])";
+        assertEquals(((Number) js("myMap.getSize().x / 2")).doubleValue(), ((Number) js(point + ".x")).doubleValue(), 1.0);
+        assertEquals(((Number) js("myMap.getSize().y / 2")).doubleValue(), ((Number) js(point + ".y")).doubleValue(), 1.0);
     }
 
     @Test

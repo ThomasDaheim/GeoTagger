@@ -46,7 +46,7 @@ class GpxTrackTest {
         final GpxTrack track = new GpxTrack(Path.of("C:/gpx/a.gpx"));
         final TrackPoint point = new TrackPoint(Instant.parse("2026-11-04T10:00:00Z"), 46.5, 11.5, null);
         track.loading();
-        final GpxLine line = new GpxLine(List.of(new LatLon(46.5, 11.5)), "#0000FF");
+        final GpxLine line = new GpxLine(List.of(new GpxPoint(new LatLon(46.5, 11.5), null, null)), "#0000FF");
         track.loaded(new GpxContent(List.of(line), List.of(point)));
         assertEquals(GpxTrack.State.LOADED, track.state());
         assertEquals(List.of(point), track.points());

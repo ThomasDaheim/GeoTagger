@@ -49,13 +49,12 @@ public enum GeoTaggerPreferences implements IPreferencesStore {
     RECENT_WINDOW_TOP("recentWindowTop", Double.toString(-1), Double.class),
     // list vs. preview
     RECENT_LEFT_DIVIDER_POS("recentLeftDividerPos", Double.toString(0.55), Double.class),
-    // left side vs. map / details
+    // left side vs. right side
     RECENT_CENTRAL_DIVIDER_POS("recentCentralDividerPos", Double.toString(0.5), Double.class),
-    // map vs. details / image info
-    // defaults: all fields of the details visible in the default window size, a few rows for the tracks
-    RECENT_RIGHT_DIVIDER_POS("recentRightDividerPos", Double.toString(0.4), Double.class),
-    // details / image info vs. track list
-    RECENT_RIGHT_LOWER_DIVIDER_POS("recentRightLowerDividerPos", Double.toString(0.88), Double.class),
+    // tabs map / image info vs. GPX section - new key since plan 4c: the old one split map and details
+    RECENT_RIGHT_DIVIDER_POS("recentTabsDividerPos", Double.toString(0.65), Double.class),
+    // track list vs. track points
+    RECENT_TRACK_DIVIDER_POS("recentTrackDividerPos", Double.toString(0.45), Double.class),
 
     EXIFTOOL_PATH("exifToolPath", "", String.class),
     RECENT_FOLDER("recentFolder", System.getProperty("user.home"), String.class),

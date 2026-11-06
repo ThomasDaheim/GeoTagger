@@ -22,6 +22,7 @@
 <?import tf.geotagger.main.ImageInfoPane?>
 <?import tf.geotagger.main.MapPane?>
 <?import tf.geotagger.main.TrackListPane?>
+<?import tf.geotagger.main.TrackPointsPane?>
 <?import tf.geotagger.main.PreviewPane?>
 
 <BorderPane xmlns="http://javafx.com/javafx" xmlns:fx="http://javafx.com/fxml" fx:controller="tf.geotagger.main.GeoTagger">
@@ -76,14 +77,20 @@
                 </VBox>
                 <PreviewPane fx:id="previewPane"/>
             </SplitPane>
+            <!-- like GeoSetter: map and image info as tabs, below the GPX section with tracks and their points -->
             <SplitPane fx:id="rightSplit" orientation="VERTICAL">
-                <MapPane fx:id="mapPane"/>
                 <TabPane fx:id="infoTabs" tabClosingPolicy="UNAVAILABLE">
+                    <Tab fx:id="mapTab" text="Map">
+                        <MapPane fx:id="mapPane"/>
+                    </Tab>
                     <Tab fx:id="imageInfoTab" text="Image info">
                         <ImageInfoPane fx:id="imageInfoPane"/>
                     </Tab>
                 </TabPane>
-                <TrackListPane fx:id="trackListPane"/>
+                <SplitPane fx:id="trackSplit">
+                    <TrackListPane fx:id="trackListPane"/>
+                    <TrackPointsPane fx:id="trackPointsPane"/>
+                </SplitPane>
             </SplitPane>
         </SplitPane>
     </center>

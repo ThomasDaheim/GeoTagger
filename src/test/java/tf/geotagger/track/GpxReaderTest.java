@@ -32,6 +32,7 @@ import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import tf.geo.LatLon;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -139,6 +140,16 @@ class GpxReaderTest {
         assertNull(GpxReader.cssColor(null, "Transparent"));
         assertEquals("#ff0000", GpxReader.cssColor("#ff0000", "Blue"));
         assertEquals("darkred", GpxReader.cssColor(null, "DarkRed"));
+    }
+
+    @Test
+    void readsPointTimesAndElevation() throws IOException {
+        final Path gpx = gpx("points.gpx", "<gpx><trk><trkseg>"
+                + "<trkpt lat=\"46.0\" lon=\"11.0\"><ele>512.4</ele><time>2026-11-04T10:00:00Z</time></trkpt>"
+                + "<trkpt lat=\"46.1\" lon=\"11.1\"/></trkseg></trk></gpx>");
+        final List<GpxPoint> points = GpxReader.readLines(gpx).get(0).points();
+        assertEquals(new GpxPoint(new LatLon(46.0, 11.0), Instant.parse("2026-11-04T10:00:00Z"), 512.4), points.get(0));
+        assertEquals(new GpxPoint(new LatLon(46.1, 11.1), null, null), points.get(1));
     }
 
     @Test

@@ -110,7 +110,7 @@ import tf.helper.javafx.UsefulKeyCodes;
 
 /**
  * Controller of the main window (GeoTagger.fxml): ExifTool start, folder loading, file list with filters, preview,
- * details / image info, undo / redo and saving.
+ * edit dialog, map / image info, tracks, undo / redo and saving.
  */
 public class GeoTagger implements Initializable {
     // "2": the columns changed with plan 4c - TableViewPreferences would put the old widths on the new columns
@@ -143,6 +143,8 @@ public class GeoTagger implements Initializable {
     private SplitPane leftSplit;
     @FXML
     private SplitPane rightSplit;
+    @FXML
+    private SplitPane trackSplit;
     @FXML
     private HBox filterBox;
     @FXML
@@ -181,6 +183,8 @@ public class GeoTagger implements Initializable {
     private MapPane mapPane;
     @FXML
     private TrackListPane trackListPane;
+    @FXML
+    private TrackPointsPane trackPointsPane;
 
     private final ObservableList<MediaFile> files = FXCollections.observableArrayList();
     private final FilteredList<MediaFile> filteredFiles = new FilteredList<>(files);
@@ -234,8 +238,9 @@ public class GeoTagger implements Initializable {
         final Double leftDivider = GeoTaggerPreferences.RECENT_LEFT_DIVIDER_POS.getAsType();
         leftSplit.setDividerPositions(leftDivider);
         final Double rightDivider = GeoTaggerPreferences.RECENT_RIGHT_DIVIDER_POS.getAsType();
-        final Double rightLowerDivider = GeoTaggerPreferences.RECENT_RIGHT_LOWER_DIVIDER_POS.getAsType();
-        rightSplit.setDividerPositions(rightDivider, rightLowerDivider);
+        rightSplit.setDividerPositions(rightDivider);
+        final Double trackDivider = GeoTaggerPreferences.RECENT_TRACK_DIVIDER_POS.getAsType();
+        trackSplit.setDividerPositions(trackDivider);
         TableViewPreferences.loadTableViewPreferences(mediaTable, TABLE_PREFERENCES, GeoTaggerPreferences.INSTANCE);
 
         // like GPXEditor - text fields handle ctrl+z themselves, the rest of the window gets undo / redo
@@ -280,7 +285,7 @@ public class GeoTagger implements Initializable {
         GeoTaggerPreferences.RECENT_CENTRAL_DIVIDER_POS.put(centralSplit.getDividerPositions()[0]);
         GeoTaggerPreferences.RECENT_LEFT_DIVIDER_POS.put(leftSplit.getDividerPositions()[0]);
         GeoTaggerPreferences.RECENT_RIGHT_DIVIDER_POS.put(rightSplit.getDividerPositions()[0]);
-        GeoTaggerPreferences.RECENT_RIGHT_LOWER_DIVIDER_POS.put(rightSplit.getDividerPositions()[1]);
+        GeoTaggerPreferences.RECENT_TRACK_DIVIDER_POS.put(trackSplit.getDividerPositions()[0]);
         GeoTaggerPreferences.INCLUDE_SUBFOLDERS.put(includeSubfoldersCheck.isSelected());
         TableViewPreferences.saveTableViewPreferences(mediaTable, TABLE_PREFERENCES, GeoTaggerPreferences.INSTANCE);
         DoUndoManager.getInstance().changeCountProperty().removeListener(undoListener);
@@ -464,6 +469,8 @@ public class GeoTagger implements Initializable {
         });
         mapPane.setOnFileMoved((file, position) -> setPosition(List.of(file), position, "Set position"));
         trackListPane.setMap(mapPane);
+        trackListPane.setOnSelectionChanged(trackPointsPane::showTracks);
+        trackPointsPane.setOnPointSelected(mapPane::panTo);
         mapPane.setSelectionSupplier(this::selectedFiles);
         mapPane.setOnSetPosition((selected, position) -> setPosition(selected, position, "Set position"));
         // ctrl + drag on the map: the files in the rectangle - with shift added to the selection

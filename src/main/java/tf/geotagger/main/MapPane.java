@@ -232,7 +232,14 @@ public class MapPane extends StackPane {
      * @param file file to center on - nothing happens without coordinates
      */
     void panToFile(MediaFile file) {
-        MapMarkers.position(file).ifPresent(position -> withMap(view -> view.panTo(position)));
+        MapMarkers.position(file).ifPresent(this::panTo);
+    }
+
+    /**
+     * @param position position to center the map on, e.g. a selected track point
+     */
+    void panTo(LatLon position) {
+        withMap(view -> view.panTo(position));
     }
 
     /**
@@ -278,7 +285,7 @@ public class MapPane extends StackPane {
      */
     void showTrack(GpxTrack track, String fallbackColor) {
         final List<TrackLine> lines = track.lines().stream()
-                .map(line -> new TrackLine(line.points(), line.color() != null ? line.color() : fallbackColor))
+                .map(line -> new TrackLine(line.positions(), line.color() != null ? line.color() : fallbackColor))
                 .toList();
         withMap(view -> view.showTrack(track.id(), lines));
     }

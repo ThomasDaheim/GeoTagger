@@ -29,9 +29,11 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import javafx.scene.control.Label;
+import javafx.scene.control.TabPane;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.ToggleButton;
@@ -105,6 +107,32 @@ class GeoTaggerUiTest {
         }
         robot.interact(() -> controller.loadFolder(dir, false));
         UiTestSupport.waitUntilIdle(controller);
+    }
+
+    @Test
+    void imageInfoTabKeepsTheMap(FxRobot robot) throws TimeoutException {
+        loadThreeImages(robot);
+        UiTestSupport.waitUntilMapReady(controller);
+        final TableView<MediaFile> table = robot.lookup("#mediaTable").queryTableView();
+        robot.interact(() -> table.getSelectionModel().clearAndSelect(table.getItems().indexOf(fileNamed(table, "a.jpg"))));
+        final TabPane tabs = robot.lookup("#infoTabs").queryAs(TabPane.class);
+        final Object markers = mapScript("geoMarkerCount()");
+
+        robot.interact(() -> tabs.getSelectionModel().select(tabs.getTabs().stream()
+                .filter(tab -> "imageInfoTab".equals(tab.getId())).findFirst().orElseThrow()));
+        @SuppressWarnings("unchecked")
+        final TableView<Map.Entry<String, String>> info = robot.lookup("#imageInfoPane .table-view").queryAs(TableView.class);
+        WaitForAsyncUtils.waitFor(10, TimeUnit.SECONDS, () -> info.getItems().stream().anyMatch(row -> "Meran".equals(row.getValue())));
+
+        robot.interact(() -> tabs.getSelectionModel().select(tabs.getTabs().stream()
+                .filter(tab -> "mapTab".equals(tab.getId())).findFirst().orElseThrow()));
+        // no waiting for the map to load again
+        assertEquals(markers, mapScript("geoMarkerCount()"));
+    }
+
+    private Object mapScript(String script) {
+        return WaitForAsyncUtils.waitFor(WaitForAsyncUtils.asyncFx(
+                () -> controller.mapPane().mapView().getWebView().getEngine().executeScript(script)));
     }
 
     private static MediaFile fileNamed(TableView<MediaFile> table, String name) {

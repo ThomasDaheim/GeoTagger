@@ -29,10 +29,16 @@ import java.util.List;
 import tf.geo.LatLon;
 
 /**
- * One segment (trkseg) of a GPX track as it is drawn on the map.
+ * One segment (trkseg) of a GPX track as it is drawn on the map and listed in the point list.
  *
- * @param points positions of the segment - also those without time
+ * @param points points of the segment - also those without time
  * @param color CSS colour of its track from the GPX file, null if the file has none
  */
-public record GpxLine(List<LatLon> points, String color) {
+public record GpxLine(List<GpxPoint> points, String color) {
+    /**
+     * @return the positions of the points, for the map
+     */
+    public List<LatLon> positions() {
+        return points.stream().map(GpxPoint::position).toList();
+    }
 }
