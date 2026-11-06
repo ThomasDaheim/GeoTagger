@@ -73,6 +73,15 @@ class FieldTextTest {
     }
 
     @Test
+    void formatsCoordinatesAsDegreesMinutesSeconds() {
+        assertEquals("N46°40'48.05\"; E11°5'28.61\"", FieldText.formatCoordinates(46.680014, 11.091281));
+        assertEquals("S33°52'30.00\"; W151°12'0.00\"", FieldText.formatCoordinates(-33.875, -151.2));
+        // rounded seconds of 60.00 carry over to the minutes
+        assertEquals("N47°0'0.00\"; E11°0'0.00\"", FieldText.formatCoordinates(46.9999999, 11.0));
+        assertEquals("", FieldText.formatCoordinates(46.5, null));
+    }
+
+    @Test
     void parsesDegreesWithHemisphere() {
         assertEquals(48.1372, (Double) FieldText.parse(Field.LATITUDE, "48.1372° N"), 1e-9);
         assertEquals(48 + 8 / 60.0 + 14 / 3600.0, (Double) FieldText.parse(Field.LATITUDE, "48° 08′ 14″ N"), 1e-9);

@@ -1,0 +1,7 @@
+/* GeoTagger - on top of JMetro (added after it) */
+
+/* values changed but not saved yet - same orange as the markers on the map */
+.table-cell.changed {
+    -fx-text-fill: #e07000;
+    -fx-font-weight: bold;
+}

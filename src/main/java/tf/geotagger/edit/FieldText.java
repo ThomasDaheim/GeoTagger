@@ -81,6 +81,29 @@ public final class FieldText {
     }
 
     /**
+     * Coordinates as GeoSetter shows them in its list, e.g. {@code N46°40'48.05"; E11°5'28.61"}.
+     *
+     * @param latitude latitude in decimal degrees, may be null
+     * @param longitude longitude in decimal degrees, may be null
+     * @return degrees / minutes / seconds with hemisphere - empty if one of the values is missing
+     */
+    public static String formatCoordinates(Double latitude, Double longitude) {
+        if (latitude == null || longitude == null) {
+            return "";
+        }
+        return dms(latitude, 'N', 'S') + "; " + dms(longitude, 'E', 'W');
+    }
+
+    private static String dms(double value, char positive, char negative) {
+        // in hundredths of a second, so that a rounded 60.00 carries over to the minutes
+        final long hundredths = Math.round(Math.abs(value) * 3600 * 100);
+        final long degrees = hundredths / (3600 * 100);
+        final long minutes = hundredths / (60 * 100) % 60;
+        final double seconds = (hundredths % (60 * 100)) / 100.0;
+        return String.format(Locale.ROOT, "%c%d°%d'%.2f\"", value < 0 ? negative : positive, degrees, minutes, seconds);
+    }
+
+    /**
      * @param field field to parse for
      * @param text text as entered - blank means "no value"
      * @return the value of the field's type, null for blank text

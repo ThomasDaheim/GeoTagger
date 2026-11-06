@@ -41,6 +41,8 @@ import jfxtras.styles.jmetro.Style;
  */
 public class GeoTaggerManager extends Application {
     public static final String TITLE = "GeoTagger";
+    // GeoTagger's own styles on top of JMetro - also used by the dialogs
+    static final String STYLESHEET = GeoTaggerManager.class.getResource("/GeoTagger.css").toExternalForm();
 
     private Stage myStage;
     private GeoTagger myGeoTagger;
@@ -82,6 +84,8 @@ public class GeoTaggerManager extends Application {
         myStage.setY(top);
         myStage.setTitle(TITLE);
         new JMetro(Style.LIGHT).setScene(myStage.getScene());
+        // our own styles after JMetro, so that they win
+        myStage.getScene().getStylesheets().add(STYLESHEET);
         myStage.show();
         // started from another application (e.g. NetBeans) Windows doesn't bring the window to the front -
         // briefly "always on top" does, same trick as the splash screen of GPXEditor

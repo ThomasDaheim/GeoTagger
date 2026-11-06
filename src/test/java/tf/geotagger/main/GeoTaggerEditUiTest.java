@@ -34,6 +34,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import javafx.scene.control.Button;
+import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
@@ -113,11 +114,14 @@ class GeoTaggerEditUiTest {
                 .findFirst().orElseThrow();
     }
 
-    // columns aren't nodes - found via the table, the cell data is the shown text
-    private static Object placeStatus(TableView<MediaFile> table, MediaFile file) {
-        final TableColumn<MediaFile, ?> column = table.getColumns().stream()
-                .filter(candidate -> "placeStatusColumn".equals(candidate.getId())).findFirst().orElseThrow();
-        return column.getCellData(file);
+    // true if the shown cell of this file and column is marked as changed (style class "changed")
+    private static boolean isMarkedChanged(FxRobot robot, MediaFile file, String columnId) {
+        WaitForAsyncUtils.waitForFxEvents();
+        return robot.lookup(".table-cell").queryAllAs(TableCell.class).stream()
+                .filter(cell -> cell.getTableColumn() != null && columnId.equals(cell.getTableColumn().getId()))
+                .filter(cell -> cell.getTableRow() != null && cell.getTableRow().getItem() == file)
+                .findFirst().orElseThrow()
+                .getStyleClass().contains("changed");
     }
 
     // selects the file in the list - the details show it afterwards
@@ -239,7 +243,9 @@ class GeoTaggerEditUiTest {
         enter(robot, Field.CITY, "Bozen");
 
         assertEquals("Bozen", file.value(Field.CITY));
-        assertEquals("●", placeStatus(table(robot), file));
+        assertTrue(isMarkedChanged(robot, file, "cityColumn"));
+        assertEquals("Bozen", table(robot).getColumns().stream().filter(column -> "cityColumn".equals(column.getId()))
+                .findFirst().orElseThrow().getCellData(file));
         assertEquals("Save (1)", robot.lookup("#saveButton").queryButton().getText());
     }
 
@@ -296,7 +302,7 @@ class GeoTaggerEditUiTest {
             assertEquals("Bozen", tags.get("XMP-photoshop:City"));
         }
         assertTrue(Files.exists(dir.resolve("a.jpg_original")));
-        assertEquals("✓", placeStatus(table(robot), file));
+        assertFalse(isMarkedChanged(robot, file, "cityColumn"));
     }
 
     @Test

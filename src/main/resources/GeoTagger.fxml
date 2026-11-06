@@ -59,10 +59,14 @@
                         <columns>
                             <TableColumn fx:id="nameColumn" text="Name" prefWidth="260"/>
                             <TableColumn fx:id="captureTimeColumn" text="Capture time" prefWidth="150"/>
-                            <TableColumn fx:id="placeColumn" text="Place" prefWidth="140"/>
-                            <TableColumn fx:id="coordinatesStatusColumn" text="GPS" prefWidth="60" minWidth="60"/>
-                            <TableColumn fx:id="placeStatusColumn" text="Loc." prefWidth="60" minWidth="60"/>
-                            <TableColumn fx:id="altitudeStatusColumn" text="Alt." prefWidth="60" minWidth="60"/>
+                            <TableColumn fx:id="coordinatesColumn" text="Coordinates" prefWidth="190"/>
+                            <TableColumn fx:id="altitudeColumn" text="Altitude" prefWidth="90"/>
+                            <TableColumn fx:id="countryCodeColumn" text="Code" prefWidth="50"/>
+                            <TableColumn fx:id="countryColumn" text="Country" prefWidth="110"/>
+                            <TableColumn fx:id="stateColumn" text="State" prefWidth="110"/>
+                            <TableColumn fx:id="cityColumn" text="City" prefWidth="110"/>
+                            <TableColumn fx:id="sublocationColumn" text="Sublocation" prefWidth="120"/>
+                            <TableColumn fx:id="timeOffsetColumn" text="Time zone" prefWidth="105"/>
                         </columns>
                         <placeholder>
                             <Label text="Open a folder to see its photos and videos"/>

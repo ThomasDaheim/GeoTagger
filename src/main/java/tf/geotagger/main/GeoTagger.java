@@ -45,6 +45,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import javafx.application.Platform;
 import javafx.beans.property.ReadOnlyStringWrapper;
@@ -70,6 +71,7 @@ import javafx.scene.control.SelectionMode;
 import javafx.scene.control.SplitMenuButton;
 import javafx.scene.control.SplitPane;
 import javafx.scene.control.Tab;
+import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.ToggleButton;
@@ -88,6 +90,7 @@ import tf.exiftool.ExifTool;
 import tf.exiftool.ExifToolException;
 import tf.geo.LatLon;
 import tf.geotagger.edit.ChangeFieldsAction;
+import tf.geotagger.edit.FieldText;
 import tf.geotagger.files.FolderScanner;
 import tf.geotagger.metadata.ExifToolLocator;
 import tf.geotagger.metadata.MetadataReader;
@@ -109,13 +112,11 @@ import tf.helper.javafx.UsefulKeyCodes;
  * details / image info, undo / redo and saving.
  */
 public class GeoTagger implements Initializable {
-    private static final String TABLE_PREFERENCES = "mediaTable";
+    // "2": the columns changed with plan 4c - TableViewPreferences would put the old widths on the new columns
+    private static final String TABLE_PREFERENCES = "mediaTable2";
     private static final DateTimeFormatter CAPTURE_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-    private static final String YES = "\u2713";
-    private static final String NO = "\u2013";
-    // field changed, not saved yet
-    private static final String CHANGED = "\u25CF";
-    private static final Field[] PLACE_FIELDS = Field.PLACE_FIELDS.toArray(new Field[0]);
+    // style class of cells with a changed, not yet saved value - see GeoTagger.css
+    private static final String CHANGED_STYLE = "changed";
     // extracted previews of RAW / HEIC / videos - emptied when GeoTagger ends
     private static final Path PREVIEW_CACHE = Path.of(System.getProperty("java.io.tmpdir"), "GeoTagger", "preview");
     // ExifTool uses one CPU core - 4 processes read a folder about three times faster (777 files: 19.3 s -> 6.4 s)
@@ -148,13 +149,21 @@ public class GeoTagger implements Initializable {
     @FXML
     private TableColumn<MediaFile, String> captureTimeColumn;
     @FXML
-    private TableColumn<MediaFile, String> placeColumn;
+    private TableColumn<MediaFile, String> coordinatesColumn;
     @FXML
-    private TableColumn<MediaFile, String> coordinatesStatusColumn;
+    private TableColumn<MediaFile, String> altitudeColumn;
     @FXML
-    private TableColumn<MediaFile, String> placeStatusColumn;
+    private TableColumn<MediaFile, String> countryCodeColumn;
     @FXML
-    private TableColumn<MediaFile, String> altitudeStatusColumn;
+    private TableColumn<MediaFile, String> countryColumn;
+    @FXML
+    private TableColumn<MediaFile, String> stateColumn;
+    @FXML
+    private TableColumn<MediaFile, String> cityColumn;
+    @FXML
+    private TableColumn<MediaFile, String> sublocationColumn;
+    @FXML
+    private TableColumn<MediaFile, String> timeOffsetColumn;
     @FXML
     private Label statusLabel;
     @FXML
@@ -289,16 +298,50 @@ public class GeoTagger implements Initializable {
         sortedFiles.comparatorProperty().bind(mediaTable.comparatorProperty());
         mediaTable.setItems(sortedFiles);
         mediaTable.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
+        // columns can be hidden via the menu button in the header - saved with the table preferences
+        mediaTable.setTableMenuButtonVisible(true);
 
         nameColumn.setCellValueFactory(cell -> new ReadOnlyStringWrapper(displayName(cell.getValue())));
         captureTimeColumn.setCellValueFactory(cell -> new ReadOnlyStringWrapper(captureTime(cell.getValue())));
-        placeColumn.setCellValueFactory(cell -> new ReadOnlyStringWrapper(place(cell.getValue())));
-        coordinatesStatusColumn.setCellValueFactory(cell -> new ReadOnlyStringWrapper(
-                status(cell.getValue(), cell.getValue().hasCoordinates(), Field.LATITUDE, Field.LONGITUDE)));
-        placeStatusColumn.setCellValueFactory(cell -> new ReadOnlyStringWrapper(
-                status(cell.getValue(), cell.getValue().hasPlace(), PLACE_FIELDS)));
-        altitudeStatusColumn.setCellValueFactory(cell -> new ReadOnlyStringWrapper(
-                status(cell.getValue(), cell.getValue().hasAltitude(), Field.ALTITUDE)));
+        // the values themselves, like GeoSetter - not editable here, see the edit dialog
+        valueColumn(coordinatesColumn, file -> FieldText.formatCoordinates(file.latitude(), file.longitude()),
+                Field.LATITUDE, Field.LONGITUDE);
+        valueColumn(altitudeColumn, file -> file.altitude() == null ? "" : FieldText.format(Field.ALTITUDE, file.altitude()) + " m",
+                Field.ALTITUDE);
+        valueColumn(countryCodeColumn, file -> FieldText.format(Field.COUNTRY_CODE, file.value(Field.COUNTRY_CODE)), Field.COUNTRY_CODE);
+        valueColumn(countryColumn, file -> FieldText.format(Field.COUNTRY, file.value(Field.COUNTRY)), Field.COUNTRY);
+        valueColumn(stateColumn, file -> FieldText.format(Field.STATE, file.value(Field.STATE)), Field.STATE);
+        valueColumn(cityColumn, file -> FieldText.format(Field.CITY, file.value(Field.CITY)), Field.CITY);
+        valueColumn(sublocationColumn, file -> FieldText.format(Field.SUBLOCATION, file.value(Field.SUBLOCATION)), Field.SUBLOCATION);
+        valueColumn(timeOffsetColumn, file -> FieldText.format(Field.TIME_OFFSET, file.value(Field.TIME_OFFSET)), Field.TIME_OFFSET);
+    }
+
+    // a column showing a value - its cell is marked when one of the fields has a pending change
+    private static void valueColumn(TableColumn<MediaFile, String> column, Function<MediaFile, String> text, Field... fields) {
+        column.setCellValueFactory(cell -> new ReadOnlyStringWrapper(text.apply(cell.getValue())));
+        column.setCellFactory(unused -> new TableCell<>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                setText(empty ? null : item);
+                final MediaFile file = empty || getTableRow() == null ? null : getTableRow().getItem();
+                final boolean changed = file != null && Arrays.stream(fields).anyMatch(file.pendingChanges()::containsKey);
+                getStyleClass().remove(CHANGED_STYLE);
+                if (changed) {
+                    getStyleClass().add(CHANGED_STYLE);
+                }
+            }
+        });
+    }
+
+    // e.g. "777 files (464 with coordinates) - 1 selected" like GeoSetter - while loading / saving the progress is shown
+    private void updateStatus() {
+        if (statusLabel.textProperty().isBound()) {
+            return;
+        }
+        final long withCoordinates = files.stream().filter(MediaFile::hasCoordinates).count();
+        statusLabel.setText(files.size() + " files (" + withCoordinates + " with coordinates) - " + selectedFiles().size()
+                + " selected");
     }
 
     private void initFilters() {
@@ -376,6 +419,7 @@ public class GeoTagger implements Initializable {
         if (selected.size() == 1) {
             mapPane.panToFile(selected.get(0));
         }
+        updateStatus();
     }
 
     private void initMap() {
@@ -534,6 +578,7 @@ public class GeoTagger implements Initializable {
         updateButtons();
         detailsPane.setFiles(selectedFiles());
         mapPane.showFiles(files, selectedFiles());
+        updateStatus();
     }
 
     private boolean hasUnsavedChanges() {
@@ -696,7 +741,6 @@ public class GeoTagger implements Initializable {
             mapPane.fitToFiles(files);
             trackListPane.setTracks(gpxFiles.get());
             stage.setTitle(GeoTaggerManager.TITLE + " - " + newFolder);
-            statusLabel.setText(files.size() + " files in " + newFolder);
             GeoTaggerPreferences.getRecentFolders().addRecentFile(newFolder.toString());
             updateRecentFolders();
             select(0);
@@ -859,18 +903,4 @@ public class GeoTagger implements Initializable {
         return CAPTURE_TIME.format(time.dateTime()) + (time.utc() ? " UTC" : "");
     }
 
-    private static String place(MediaFile file) {
-        final String city = file.text(Field.CITY);
-        return city != null ? city : Objects.requireNonNullElse(file.text(Field.COUNTRY), "");
-    }
-
-    private static String status(MediaFile file, boolean present, Field... fields) {
-        final Map<Field, Object> pending = file.pendingChanges();
-        for (Field field : fields) {
-            if (pending.containsKey(field)) {
-                return CHANGED;
-            }
-        }
-        return present ? YES : NO;
-    }
 }

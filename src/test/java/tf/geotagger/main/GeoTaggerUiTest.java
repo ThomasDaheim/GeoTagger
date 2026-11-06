@@ -81,6 +81,10 @@ class GeoTaggerUiTest {
     void start(Stage stage) throws IOException {
         this.stage = stage;
         UiTestSupport.preparePreferences(exifTool);
+        // column widths saved by plan 4 / 4b under the old key - the columns have changed since (see oldColumnSettingsAreIgnored)
+        for (int column = 0; column < 6; column++) {
+            GeoTaggerPreferences.INSTANCE.put("mediaTable-ColumnWidth-" + column, "45");
+        }
         manager = UiTestSupport.start(stage);
         controller = manager.controller();
     }
@@ -118,9 +122,18 @@ class GeoTaggerUiTest {
     }
 
     @Test
-    void statusColumnsShowTheirHeaders(FxRobot robot) {
-        final String[][] headers = {{"coordinatesStatusColumn", "GPS"}, {"placeStatusColumn", "Loc."},
-            {"altitudeStatusColumn", "Alt."}};
+    void oldColumnSettingsAreIgnored(FxRobot robot) {
+        // the old width of the 3rd column (45) would make the coordinates unreadable
+        final TableView<MediaFile> table = robot.lookup("#mediaTable").queryTableView();
+        final TableColumn<MediaFile, ?> coordinates = table.getColumns().stream()
+                .filter(column -> "coordinatesColumn".equals(column.getId())).findFirst().orElseThrow();
+        assertTrue(coordinates.getWidth() > 100, "width " + coordinates.getWidth());
+    }
+
+    @Test
+    void valueColumnsShowTheirHeaders(FxRobot robot) {
+        final String[][] headers = {{"coordinatesColumn", "Coordinates"}, {"altitudeColumn", "Altitude"},
+            {"cityColumn", "City"}, {"timeOffsetColumn", "Time zone"}};
         for (String[] header : headers) {
             // the text actually drawn - a column too narrow shows "..." or nothing
             final Text shown = robot.lookup("#" + header[0] + " .label .text").queryAs(Text.class);
@@ -137,12 +150,17 @@ class GeoTaggerUiTest {
         assertEquals("All (3)", robot.lookup("#filter-ALL").queryAs(ToggleButton.class).getText());
         assertEquals("Without coordinates (2)", robot.lookup("#filter-WITHOUT_COORDINATES").queryAs(ToggleButton.class).getText());
         assertEquals("Without place (2)", robot.lookup("#filter-WITHOUT_PLACE").queryAs(ToggleButton.class).getText());
-        assertEquals("3 files in " + dir, robot.lookup("#statusLabel").queryAs(Label.class).getText());
+        assertEquals("3 files (1 with coordinates) - 1 selected", robot.lookup("#statusLabel").queryAs(Label.class).getText());
         // columns aren't nodes - found via the table, the cell data is the shown text
-        final TableColumn<MediaFile, ?> gpsColumn = table.getColumns().stream()
-                .filter(column -> "coordinatesStatusColumn".equals(column.getId())).findFirst().orElseThrow();
-        assertEquals("✓", gpsColumn.getCellData(fileNamed(table, "a.jpg")));
-        assertEquals("–", gpsColumn.getCellData(fileNamed(table, "b.jpg")));
+        assertEquals("N46°30'0.00\"; E11°30'0.00\"", cellData(table, "coordinatesColumn", "a.jpg"));
+        assertEquals("", cellData(table, "coordinatesColumn", "b.jpg"));
+        assertEquals("Meran", cellData(table, "cityColumn", "a.jpg"));
+    }
+
+    private static Object cellData(TableView<MediaFile> table, String columnId, String fileName) {
+        final TableColumn<MediaFile, ?> column = table.getColumns().stream()
+                .filter(candidate -> columnId.equals(candidate.getId())).findFirst().orElseThrow();
+        return column.getCellData(fileNamed(table, fileName));
     }
 
     @Test
