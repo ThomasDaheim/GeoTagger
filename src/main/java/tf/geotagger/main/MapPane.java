@@ -25,7 +25,6 @@
  */
 package tf.geotagger.main;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -50,7 +49,6 @@ import tf.geo.map.MapListener;
 import tf.geo.map.TrackLine;
 import tf.geotagger.model.MediaFile;
 import tf.geotagger.track.GpxTrack;
-import tf.geotagger.track.TrackPoint;
 
 /**
  * The map of the main window: markers for the files, selection, moving markers - see spec, "Leaflet-Karte".
@@ -74,6 +72,7 @@ public class MapPane extends StackPane {
     private BiConsumer<MediaFile, LatLon> onFileMoved = (file, position) -> { };
     private Supplier<List<MediaFile>> selection = List::of;
     private BiConsumer<List<MediaFile>, LatLon> onSetPosition = (files, position) -> { };
+    private BiConsumer<List<MediaFile>, Boolean> onAreaSelected = (files, shiftDown) -> { };
 
     public MapPane() {
         getChildren().add(mapView);
@@ -95,11 +94,24 @@ public class MapPane extends StackPane {
                     onFileMoved.accept(file, position);
                 }
             }
+
+            @Override
+            public void areaSelected(LatLon southWest, LatLon northEast, boolean shiftDown) {
+                final List<MediaFile> inside = filesById.values().stream()
+                        .filter(file -> MapMarkers.position(file).filter(position -> isInside(position, southWest, northEast)).isPresent())
+                        .toList();
+                onAreaSelected.accept(inside, shiftDown);
+            }
         });
         mapView.displayMap(MapConfig.defaults()).exceptionally(ex -> {
             LOGGER.log(Level.SEVERE, "Map can't be shown", ex);
             return null;
         });
+    }
+
+    private static boolean isInside(LatLon position, LatLon southWest, LatLon northEast) {
+        return position.latitude() >= southWest.latitude() && position.latitude() <= northEast.latitude()
+                && position.longitude() >= southWest.longitude() && position.longitude() <= northEast.longitude();
     }
 
     // right click: "Set position of n files here" for the selection - the WebView's own menu is switched off
@@ -221,18 +233,22 @@ public class MapPane extends StackPane {
     }
 
     /**
-     * @param track a loaded track
-     * @param color CSS colour of its line
+     * @param handler called with the files with coordinates in the rectangle drawn with ctrl + drag, and "shift pressed"
      */
-    void showTrack(GpxTrack track, String color) {
-        final List<LatLon> points = new ArrayList<>();
-        for (TrackPoint point : track.points()) {
-            // GpxReader checks the format, not the range - such a point must not break the map
-            if (Math.abs(point.latitude()) <= 90 && Math.abs(point.longitude()) <= 180) {
-                points.add(new LatLon(point.latitude(), point.longitude()));
-            }
-        }
-        mapView.showTrack(track.id(), List.of(new TrackLine(points, color)));
+    void setOnAreaSelected(BiConsumer<List<MediaFile>, Boolean> handler) {
+        onAreaSelected = Objects.requireNonNull(handler);
+    }
+
+    /**
+     * Shows each segment of a loaded track as its own line - in the colour from the GPX file if it has one.
+     *
+     * @param track a loaded track
+     * @param fallbackColor CSS colour for segments without colour in the file
+     */
+    void showTrack(GpxTrack track, String fallbackColor) {
+        mapView.showTrack(track.id(), track.lines().stream()
+                .map(line -> new TrackLine(line.points(), line.color() != null ? line.color() : fallbackColor))
+                .toList());
     }
 
     /**

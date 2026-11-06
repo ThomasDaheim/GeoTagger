@@ -387,6 +387,20 @@ public class GeoTagger implements Initializable {
         trackListPane.setMap(mapPane);
         mapPane.setSelectionSupplier(this::selectedFiles);
         mapPane.setOnSetPosition((selected, position) -> setPosition(selected, position, "Set position"));
+        // ctrl + drag on the map: the files in the rectangle - with shift added to the selection
+        mapPane.setOnAreaSelected((inside, shiftDown) -> {
+            final MultipleSelectionModel<MediaFile> selection = mediaTable.getSelectionModel();
+            if (!shiftDown) {
+                selection.clearSelection();
+            }
+            for (MediaFile file : inside) {
+                // files hidden by the filter can't be selected
+                final int index = mediaTable.getItems().indexOf(file);
+                if (index >= 0) {
+                    selection.select(index);
+                }
+            }
+        });
         // drag the selected files onto the map
         mediaTable.setOnDragDetected(event -> {
             final List<MediaFile> selected = selectedFiles();

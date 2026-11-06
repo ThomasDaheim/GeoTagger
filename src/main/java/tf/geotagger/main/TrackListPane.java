@@ -49,7 +49,7 @@ import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
 import tf.geotagger.track.GpxReader;
 import tf.geotagger.track.GpxTrack;
-import tf.geotagger.track.TrackPoint;
+import tf.geotagger.track.GpxContent;
 
 /**
  * The track list: GPX files of the folder with a check box to load and show them on the map, "+ GPX" for more
@@ -178,26 +178,26 @@ public class TrackListPane extends VBox {
         track.loading();
         final Path file = track.file();
         loader.submit(() -> {
-            List<TrackPoint> points = null;
+            GpxContent content = null;
             String failure = null;
             try {
-                points = GpxReader.read(file);
+                content = GpxReader.readContent(file);
             } catch (IOException | RuntimeException ex) {
                 failure = String.valueOf(ex.getMessage());
             }
-            final List<TrackPoint> result = points;
+            final GpxContent result = content;
             final String error = failure;
             Platform.runLater(() -> loaded(track, result, error));
         });
     }
 
-    private void loaded(GpxTrack track, List<TrackPoint> points, String failure) {
+    private void loaded(GpxTrack track, GpxContent content, String failure) {
         if (!tracks.contains(track)) {
             // another folder was opened meanwhile
             return;
         }
-        if (points != null) {
-            track.loaded(points);
+        if (content != null) {
+            track.loaded(content);
         } else {
             track.failed(failure);
         }
@@ -206,6 +206,7 @@ public class TrackListPane extends VBox {
             return;
         }
         if (map != null) {
+            // colours of the file first - the colour of the list only for lines without
             map.showTrack(track, colors.computeIfAbsent(track, key -> COLORS.get(nextColor++ % COLORS.size())));
             // unchecked while loading
             map.setTrackVisible(track, track.shownProperty().get());

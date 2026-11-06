@@ -49,6 +49,7 @@ public final class GpxTrack {
     private final ObjectProperty<State> state = new SimpleObjectProperty<>(State.NOT_LOADED);
     private final BooleanProperty shown = new SimpleBooleanProperty(false);
     private List<TrackPoint> points = List.of();
+    private List<GpxLine> lines = List.of();
     private String failure = "";
 
     /**
@@ -73,10 +74,17 @@ public final class GpxTrack {
     }
 
     /**
-     * @return the points - empty until loaded
+     * @return the points with time, for the track sync - empty until loaded
      */
     public List<TrackPoint> points() {
         return points;
+    }
+
+    /**
+     * @return the segments with their colour, for the map - empty until loaded
+     */
+    public List<GpxLine> lines() {
+        return lines;
     }
 
     /**
@@ -115,14 +123,15 @@ public final class GpxTrack {
     }
 
     /**
-     * @param trackPoints points read from the file - none counts as failure
+     * @param content what was read from the file - no line with a position counts as failure
      */
-    public void loaded(List<TrackPoint> trackPoints) {
-        if (trackPoints.isEmpty()) {
+    public void loaded(GpxContent content) {
+        if (content.lines().isEmpty()) {
             failed("No track points");
             return;
         }
-        points = List.copyOf(trackPoints);
+        lines = content.lines();
+        points = content.points();
         failure = "";
         state.set(State.LOADED);
     }
@@ -131,6 +140,7 @@ public final class GpxTrack {
      * @param message why the file couldn't be read
      */
     public void failed(String message) {
+        lines = List.of();
         points = List.of();
         failure = Objects.requireNonNullElse(message, "");
         state.set(State.FAILED);

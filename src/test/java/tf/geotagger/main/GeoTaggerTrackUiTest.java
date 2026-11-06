@@ -61,7 +61,7 @@ class GeoTaggerTrackUiTest {
     private static final String TOUR = """
             <?xml version="1.0" encoding="UTF-8"?>
             <gpx version="1.1" creator="test" xmlns="http://www.topografix.com/GPX/1/1">
-              <trk><trkseg>
+              <trk><extensions><line xmlns="http://www.topografix.com/GPX/gpx_style/0/2"><color>0000FF</color></line></extensions><trkseg>
                 <trkpt lat="46.50" lon="11.50"><time>2026-11-04T10:00:00Z</time></trkpt>
                 <trkpt lat="46.51" lon="11.51"><time>2026-11-04T10:01:00Z</time></trkpt>
                 <trkpt lat="46.52" lon="11.52"><time>2026-11-04T10:02:00Z</time></trkpt>
@@ -144,6 +144,17 @@ class GeoTaggerTrackUiTest {
         robot.interact(() -> tour.shownProperty().set(false));
         assertEquals(0, number(js("geoVisibleTrackCount()")));
         assertEquals(1, number(js("geoTrackCount()")));
+    }
+
+    @Test
+    void trackColourComesFromTheFile(FxRobot robot) throws IOException, TimeoutException {
+        loadFolder(robot);
+        final GpxTrack tour = track(robot, "tour.gpx");
+        robot.interact(() -> tour.shownProperty().set(true));
+        WaitForAsyncUtils.waitFor(10, TimeUnit.SECONDS, () -> tour.state() == GpxTrack.State.LOADED);
+        WaitForAsyncUtils.waitForFxEvents();
+        final String id = "'" + tour.id().replace("\\", "\\\\") + "'";
+        assertEquals("#0000FF", js("geoTracks[" + id + "].getLayers()[0].options.color"));
     }
 
     @Test

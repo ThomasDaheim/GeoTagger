@@ -28,12 +28,16 @@ package tf.geotagger.main;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.TimeoutException;
+import java.util.stream.Collectors;
+import javafx.geometry.Point2D;
 import javafx.scene.Node;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
 import javafx.scene.control.skin.VirtualFlow;
 import javafx.scene.input.KeyCode;
+import javafx.scene.input.MouseButton;
 import javafx.scene.web.WebView;
 import javafx.stage.Stage;
 import org.junit.jupiter.api.BeforeAll;
@@ -274,6 +278,30 @@ class GeoTaggerMapUiTest {
         WaitForAsyncUtils.waitForFxEvents();
         final VirtualFlow<?> flow = robot.lookup("#mediaTable .virtual-flow").queryAs(VirtualFlow.class);
         assertTrue(flow.getFirstVisibleCell().getIndex() > 20, "first visible row: " + flow.getFirstVisibleCell().getIndex());
+    }
+
+    // screen point of a position on the map
+    private Point2D point(FxRobot robot, double latitude, double longitude) {
+        final WebView web = controller.mapPane().mapView().getWebView();
+        final String xy = (String) js(robot, "getPointForLatLng(" + latitude + ", " + longitude + ").join(',')");
+        final String[] parts = xy.split(",");
+        return web.localToScreen(Double.parseDouble(parts[0]), Double.parseDouble(parts[1]));
+    }
+
+    @Test
+    void ctrlDragSelectsTheFilesInTheArea(FxRobot robot) throws TimeoutException {
+        loadImages(robot);
+        js(robot, "myMap.setView([46.55, 11.55], 10, {animate: false})");
+        select(robot, "c.jpg");
+        final Point2D from = point(robot, 46.45, 11.45);
+        final Point2D to = point(robot, 46.65, 11.65);
+
+        robot.press(KeyCode.CONTROL).moveTo(from).press(MouseButton.PRIMARY).moveTo(to)
+                .release(MouseButton.PRIMARY).release(KeyCode.CONTROL);
+        WaitForAsyncUtils.waitForFxEvents();
+
+        assertEquals(Set.of("a.jpg", "b.jpg"), table(robot).getSelectionModel().getSelectedItems().stream()
+                .map(file -> file.path().getFileName().toString()).collect(Collectors.toSet()));
     }
 
     @Test
