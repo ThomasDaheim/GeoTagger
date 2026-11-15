@@ -41,6 +41,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.ResourceBundle;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -92,8 +94,15 @@ import javafx.stage.Stage;
 import tf.exiftool.ExifTool;
 import tf.exiftool.ExifToolException;
 import tf.geo.LatLon;
+import tf.geo.service.GeoServiceException;
+import tf.geo.service.Place;
+import tf.geo.service.ReverseGeocoder;
 import tf.geotagger.edit.ChangeFieldsAction;
 import tf.geotagger.edit.FieldText;
+import tf.geotagger.enrich.GridCell;
+import tf.geotagger.enrich.PlaceEnricher;
+import tf.geotagger.enrich.PlaceRun;
+import tf.geotagger.enrich.PlaceSummary;
 import tf.geotagger.files.FolderScanner;
 import tf.geotagger.metadata.ExifToolLocator;
 import tf.geotagger.metadata.MetadataReader;
@@ -133,6 +142,8 @@ public class GeoTagger implements Initializable {
     private Button saveButton;
     @FXML
     private Button editButton;
+    @FXML
+    private Button findPlaceButton;
     @FXML
     private Button undoButton;
     @FXML
@@ -208,6 +219,10 @@ public class GeoTagger implements Initializable {
     private boolean restoringSelection = false;
     // false while the first file is selected automatically after loading - the map then shows all files
     private boolean panToSelection = true;
+    // "Find place": the service from the preferences - UI tests set a fake
+    private Callable<ReverseGeocoder> placeService = PlaceServiceFactory::create;
+    // answers per service and language, for this session - filled in the worker thread
+    private final Map<String, Map<GridCell, Optional<Place>>> placeCaches = new ConcurrentHashMap<>();
     // counts loadFolder calls - results of an older one are dropped
     private int loadGeneration = 0;
     // DoUndoManager is a singleton - its listener is removed in stop(), otherwise it keeps this window alive
@@ -462,6 +477,101 @@ public class GeoTagger implements Initializable {
         });
     }
 
+    /**
+     * "Find place": country, state, city and sublocation from the coordinates - for the selected files (overwriting
+     * their place), or for all listed files without place. One undo step for the whole run.
+     */
+    @FXML
+    private void findPlaces() {
+        if (busy || folder == null) {
+            return;
+        }
+        final List<MediaFile> scope = placeScope(selectedFiles(), mediaTable.getItems());
+        if (scope.isEmpty()) {
+            statusLabel.setText("No files to look up - they need coordinates (and no place, if nothing is selected)");
+            return;
+        }
+        final ReverseGeocoder geocoder;
+        try {
+            geocoder = placeService.call();
+        } catch (Exception ex) {
+            // e.g. no GeoNames user in the preferences
+            ShowAlerts.getInstance().showAlert(Alert.AlertType.ERROR, GeoTaggerManager.TITLE, "Can't find places", ex.getMessage());
+            return;
+        }
+        final Map<GridCell, Optional<Place>> cache = placeCaches.computeIfAbsent(PlaceServiceFactory.cacheKey(),
+                key -> new ConcurrentHashMap<>());
+        final Task<PlaceRun> task = new Task<>() {
+            @Override
+            protected PlaceRun call() throws InterruptedException {
+                updateMessage("Finding places with " + geocoder.name() + " ...");
+                return new PlaceEnricher(geocoder, cache, Thread::sleep).run(scope, (done, total) -> {
+                    updateProgress(done, total);
+                    updateMessage("Finding places: " + done + " / " + total);
+                });
+            }
+        };
+        task.setOnSucceeded(event -> {
+            finishTask();
+            final PlaceRun run = task.getValue();
+            applyPlaces(run);
+            final String summary = PlaceSummary.text(run);
+            statusLabel.setText(summary);
+            if (PlaceSummary.hasProblems(run)) {
+                ShowAlerts.getInstance().showAlert(Alert.AlertType.WARNING, GeoTaggerManager.TITLE, "Not all places were found",
+                        summary + "\n" + Objects.requireNonNullElse(run.problem(), ""));
+            }
+        });
+        task.setOnFailed(event -> {
+            finishTask();
+            refreshFiles();
+            statusLabel.setText("Finding places failed");
+            ShowAlerts.getInstance().showAlert(Alert.AlertType.ERROR, GeoTaggerManager.TITLE, "Finding places failed",
+                    String.valueOf(task.getException().getMessage()));
+        });
+        runTask(task);
+    }
+
+    /**
+     * Files "Find place" asks for - see spec "Hauptfenster".
+     *
+     * @param selected the selected files
+     * @param listed the files of the list (filtered)
+     * @return with a selection its files with coordinates, otherwise the listed files with coordinates and without place
+     */
+    static List<MediaFile> placeScope(List<MediaFile> selected, List<MediaFile> listed) {
+        if (!selected.isEmpty()) {
+            return selected.stream().filter(MediaFile::hasCoordinates).toList();
+        }
+        return listed.stream().filter(MediaFile::hasCoordinates).filter(file -> !file.hasPlace()).toList();
+    }
+
+    // a found place sets all place fields - what the service doesn't know is cleared, so that no old place is mixed in
+    private void applyPlaces(PlaceRun run) {
+        final Map<MediaFile, Map<Field, Object>> values = new LinkedHashMap<>();
+        run.places().forEach((file, place) -> {
+            final Map<Field, Object> fileValues = new EnumMap<>(Field.class);
+            fileValues.put(Field.COUNTRY_CODE, place.countryCode());
+            fileValues.put(Field.COUNTRY, place.country());
+            fileValues.put(Field.STATE, place.state());
+            fileValues.put(Field.CITY, place.city());
+            fileValues.put(Field.SUBLOCATION, place.sublocation());
+            values.put(file, fileValues);
+        });
+        if (values.isEmpty()) {
+            refreshFiles();
+        } else {
+            perform(new ChangeFieldsAction("Find place", values));
+        }
+    }
+
+    /**
+     * @param service supplies the reverse geocoder for "Find place" - for UI tests, default from the preferences
+     */
+    void setPlaceService(Callable<ReverseGeocoder> service) {
+        placeService = Objects.requireNonNull(service);
+    }
+
     private void selectionChanged() {
         final List<MediaFile> selected = selectedFiles();
         updateButtons();
@@ -660,6 +770,7 @@ public class GeoTagger implements Initializable {
         // without a usable ExifTool nothing can be written - the changes stay pending
         saveButton.setDisable(busy || changed == 0 || writer == null);
         editButton.setDisable(busy || folder == null || selectedFiles().isEmpty());
+        findPlaceButton.setDisable(busy || folder == null);
         undoButton.setDisable(busy || folder == null || !DoUndoManager.getInstance().canUndo(undoKey()));
         redoButton.setDisable(busy || folder == null || !DoUndoManager.getInstance().canDo(undoKey()));
     }
