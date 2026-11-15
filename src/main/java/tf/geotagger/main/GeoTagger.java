@@ -598,7 +598,16 @@ public class GeoTagger implements Initializable {
             }
             mediaTable.scrollTo(index);
         });
-        mapPane.setOnFileMoved((file, position) -> setPosition(List.of(file), position, "Set position"));
+        mapPane.setOnFileMoved((file, position) -> {
+            if (busy) {
+                // ignored while loading, saving or finding places - the marker goes back to the file's position:
+                // removed and added again, the map only sends differences
+                mapPane.showFiles(files.stream().filter(other -> other != file).toList(), selectedFiles());
+                mapPane.showFiles(files, selectedFiles());
+                return;
+            }
+            setPosition(List.of(file), position, "Set position");
+        });
         trackListPane.setMap(mapPane);
         trackListPane.setOnSelectionChanged(trackPointsPane::showTracks);
         trackPointsPane.setOnPointSelected(mapPane::panTo);
@@ -657,7 +666,8 @@ public class GeoTagger implements Initializable {
      * @param description text of the undo step
      */
     void setPosition(List<MediaFile> changed, LatLon position, String description) {
-        if (changed.isEmpty()) {
+        // while loading, saving or finding places the files are read in the background - no changes meanwhile
+        if (busy || changed.isEmpty()) {
             return;
         }
         final Map<MediaFile, Map<Field, Object>> values = new LinkedHashMap<>();

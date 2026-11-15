@@ -104,9 +104,9 @@ public final class PlaceEnricher {
                     if (problem == null) {
                         problem = ex.getMessage();
                     }
-                    // further requests would fail the same way
-                    stopped = ex.kind() == GeoServiceException.Kind.QUOTA_EXCEEDED
-                            || ex.kind() == GeoServiceException.Kind.CONFIGURATION;
+                    // further requests would fail the same way - also a problem that lasted through all retries (e.g.
+                    // offline): otherwise each cell would cost 4 requests and 7 s while the window is locked
+                    stopped = ex.kind() != GeoServiceException.Kind.FAILED;
                 }
             }
             progress.accept(++done, cells.size());

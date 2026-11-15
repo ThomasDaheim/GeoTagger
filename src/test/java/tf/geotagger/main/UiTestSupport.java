@@ -27,6 +27,7 @@ package tf.geotagger.main;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -34,6 +35,7 @@ import javafx.scene.Node;
 import javafx.scene.control.TextField;
 import javafx.scene.input.KeyCode;
 import javafx.stage.Stage;
+import javafx.stage.Window;
 import org.junit.jupiter.api.Assumptions;
 import org.testfx.api.FxRobot;
 import org.testfx.util.WaitForAsyncUtils;
@@ -71,6 +73,13 @@ final class UiTestSupport {
      * @throws IOException if the main window can't be loaded
      */
     static GeoTaggerManager start(Stage stage) throws IOException {
+        // TestFX reuses the stage for all tests - a dialog left open by the previous test (e.g. a Cancel click that
+        // didn't land) would be modal for this stage and swallow the keys of this test
+        for (Window window : List.copyOf(Window.getWindows())) {
+            if (window != stage && window instanceof Stage dialog) {
+                dialog.close();
+            }
+        }
         final GeoTaggerManager manager = new GeoTaggerManager();
         manager.start(stage);
         // the robot clicks screen positions - the window must stay in front while the test runs

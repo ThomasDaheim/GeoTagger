@@ -133,6 +133,19 @@ class PlaceEnricherTest {
     }
 
     @Test
+    void lastingProblemsStopTheRun() throws InterruptedException {
+        // e.g. offline: without stopping every cell would cost 4 requests and 7 s of waiting - minutes with a locked window
+        final FakeGeocoder geocoder = new FakeGeocoder(INTERVAL, error(GeoServiceException.Kind.RETRYABLE));
+        final MediaFile a = file("a.jpg", 46.67, 11.16);
+        final MediaFile b = file("b.jpg", 46.5, 11.35);
+
+        final PlaceRun run = enricher(geocoder).run(List.of(a, b), (done, total) -> { });
+
+        assertEquals(4, geocoder.requests().size());
+        assertEquals(List.of(a, b), run.failed());
+    }
+
+    @Test
     void quotaStopsTheRun() throws InterruptedException {
         final FakeGeocoder geocoder = new FakeGeocoder(INTERVAL, MERAN, error(GeoServiceException.Kind.QUOTA_EXCEEDED), BOZEN);
         final MediaFile a = file("a.jpg", 46.67, 11.16);

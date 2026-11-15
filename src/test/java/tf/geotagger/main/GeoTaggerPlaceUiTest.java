@@ -29,6 +29,9 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import javafx.scene.control.Label;
 import javafx.scene.control.TableView;
@@ -42,8 +45,11 @@ import org.testfx.api.FxRobot;
 import org.testfx.framework.junit5.ApplicationExtension;
 import org.testfx.framework.junit5.Start;
 import org.testfx.framework.junit5.Stop;
+import org.testfx.util.WaitForAsyncUtils;
 import tf.exiftool.ExifTool;
+import tf.geo.LatLon;
 import tf.geo.service.Place;
+import tf.geo.service.ReverseGeocoder;
 import tf.geotagger.enrich.FakeGeocoder;
 import tf.geotagger.metadata.ExifToolTestSupport;
 import tf.geotagger.metadata.TestFiles;
@@ -177,6 +183,58 @@ class GeoTaggerPlaceUiTest {
         // the old sublocation doesn't belong to the new place
         assertNull(b.value(Field.SUBLOCATION));
         assertFalse(fileNamed(robot, "a.jpg").hasPlace());
+    }
+
+    @Test
+    void mapEditsWaitWhileFindingPlaces(FxRobot robot) throws TimeoutException {
+        // the place found for the old position must not land on a file moved meanwhile (final review of plan 5)
+        final CountDownLatch release = new CountDownLatch(1);
+        final ReverseGeocoder blocking = new ReverseGeocoder() {
+            @Override
+            public Optional<Place> reverse(LatLon position) {
+                try {
+                    release.await(20, TimeUnit.SECONDS);
+                } catch (InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                }
+                return Optional.of(MERAN);
+            }
+
+            @Override
+            public Duration minRequestInterval() {
+                return Duration.ZERO;
+            }
+
+            @Override
+            public String name() {
+                return "Blocking";
+            }
+        };
+        loadImages(robot);
+        UiTestSupport.waitUntilMapReady(controller);
+        selectOnly(robot);
+        robot.interact(() -> controller.setPlaceService(() -> blocking));
+        robot.clickOn("#findPlaceButton");
+        WaitForAsyncUtils.waitFor(5, TimeUnit.SECONDS, controller::isBusy);
+
+        final String marker = "geoMarkers['" + dir.resolve("a.jpg").toString().replace("\\", "\\\\") + "']";
+        js(marker + ".setLatLng([41.9, 12.5]); " + marker + ".fire('dragend')");
+        WaitForAsyncUtils.waitForFxEvents();
+
+        final MediaFile a = fileNamed(robot, "a.jpg");
+        assertEquals(46.5, a.latitude(), 1e-9);
+        // the marker is back at the position of the file
+        assertEquals(46.5, ((Number) js(marker + ".getLatLng().lat")).doubleValue(), 1e-9);
+
+        release.countDown();
+        UiTestSupport.waitUntilIdle(controller);
+        assertEquals("Meran", a.value(Field.CITY));
+    }
+
+    // runs the script on the JavaFX thread and returns its result
+    private Object js(String script) {
+        return WaitForAsyncUtils.waitFor(WaitForAsyncUtils.asyncFx(
+                () -> controller.mapPane().mapView().getWebView().getEngine().executeScript(script)));
     }
 
     @Test
