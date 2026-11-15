@@ -219,6 +219,9 @@ public class GeoTagger implements Initializable {
     private boolean restoringSelection = false;
     // false while the first file is selected automatically after loading - the map then shows all files
     private boolean panToSelection = true;
+    // false until the user selects files after loading - the automatic selection of the first file is no selection
+    // for "Find place" (user decision 15.11.2026)
+    private boolean selectionByUser = false;
     // "Find place": the service from the preferences - UI tests set a fake
     private Callable<ReverseGeocoder> placeService = PlaceServiceFactory::create;
     // answers per service and language, for this session - filled in the worker thread
@@ -445,6 +448,10 @@ public class GeoTagger implements Initializable {
     private void initDetails() {
         mediaTable.getSelectionModel().getSelectedItems().addListener((ListChangeListener<MediaFile>) change -> {
             if (!restoringSelection) {
+                // panToSelection is false only while GeoTagger selects the first file after loading
+                if (panToSelection) {
+                    selectionByUser = true;
+                }
                 selectionChanged();
             }
         });
@@ -478,15 +485,16 @@ public class GeoTagger implements Initializable {
     }
 
     /**
-     * "Find place": country, state, city and sublocation from the coordinates - for the selected files (overwriting
-     * their place), or for all listed files without place. One undo step for the whole run.
+     * "Find place": country, state, city and sublocation from the coordinates - for the files the user selected
+     * (overwriting their place), or for all listed files without place. The first file GeoTagger selects after loading
+     * doesn't count as selection. One undo step for the whole run.
      */
     @FXML
     private void findPlaces() {
         if (busy || folder == null) {
             return;
         }
-        final List<MediaFile> scope = placeScope(selectedFiles(), mediaTable.getItems());
+        final List<MediaFile> scope = placeScope(selectionByUser ? selectedFiles() : List.of(), mediaTable.getItems());
         if (scope.isEmpty()) {
             statusLabel.setText("No files to look up - they need coordinates (and no place, if nothing is selected)");
             return;
@@ -936,6 +944,7 @@ public class GeoTagger implements Initializable {
             updateRecentFolders();
             // the first file for the preview - the map stays fitted to all files (user decision 15.11.2026)
             panToSelection = false;
+            selectionByUser = false;
             try {
                 select(0);
             } finally {

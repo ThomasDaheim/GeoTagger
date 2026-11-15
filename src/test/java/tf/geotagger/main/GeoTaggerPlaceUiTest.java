@@ -171,6 +171,27 @@ class GeoTaggerPlaceUiTest {
     }
 
     @Test
+    void automaticSelectionAfterLoadingDoesNotCount(FxRobot robot) throws TimeoutException {
+        // user decision 15.11.2026: the first file selected by GeoTagger after loading is no selection for "Find place"
+        final Path a = TestFiles.image(dir, "a.jpg");
+        final Path b = TestFiles.image(dir, "b.jpg");
+        try (ExifTool tool = new ExifTool(exifTool)) {
+            tool.execute(List.of("-overwrite_original", "-GPS:GPSLatitude#=46.6", "-GPS:GPSLatitudeRef#=N",
+                    "-GPS:GPSLongitude#=11.6", "-GPS:GPSLongitudeRef#=E", "-XMP-photoshop:City=Bozen", a.toString()));
+            tool.execute(List.of("-overwrite_original", "-GPS:GPSLatitude#=46.5", "-GPS:GPSLatitudeRef#=N",
+                    "-GPS:GPSLongitude#=11.5", "-GPS:GPSLongitudeRef#=E", b.toString()));
+        }
+        robot.interact(() -> controller.loadFolder(dir, false));
+        UiTestSupport.waitUntilIdle(controller);
+        assertEquals(List.of(fileNamed(robot, "a.jpg")), List.copyOf(table(robot).getSelectionModel().getSelectedItems()));
+
+        findPlaces(robot);
+
+        assertEquals("Bozen", fileNamed(robot, "a.jpg").value(Field.CITY));
+        assertEquals("Meran", fileNamed(robot, "b.jpg").value(Field.CITY));
+    }
+
+    @Test
     void findPlaceOverwritesSelectedFiles(FxRobot robot) throws TimeoutException {
         loadImages(robot);
         selectOnly(robot, "b.jpg");

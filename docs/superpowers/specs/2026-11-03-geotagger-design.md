@@ -157,7 +157,7 @@ Das Layout ist an GeoSetter angelehnt:
 
 Aktionen der Werkzeugleiste wirken auf die Auswahl. Ist nichts ausgewählt, wirken sie auf alle gefilterten Dateien, für die die Aktion sinnvoll ist. „Ort ermitteln“ läuft zum Beispiel über alle Dateien mit Koordinaten, aber ohne Ort. Mit Auswahl überschreibt die Aktion vorhandene Werte der ausgewählten Dateien (Entscheidung vom 15.11.2026). Ausnahme: „Edit…“ braucht immer eine Auswahl.
 
-Nach dem Laden eines Ordners ist die Karte auf alle Dateien eingepasst. Die erste Datei wird für die Vorschau automatisch ausgewählt, verschiebt die Karte dabei aber nicht.
+Nach dem Laden eines Ordners ist die Karte auf alle Dateien eingepasst. Die erste Datei wird für die Vorschau automatisch ausgewählt, verschiebt die Karte dabei aber nicht. Diese automatische Auswahl zählt für „Ort ermitteln“ nicht als Auswahl, erst eine eigene Auswahl des Nutzers (Entscheidung vom 15.11.2026). Während Laden, Speichern oder „Ort ermitteln“ laufen, sind auch Änderungen über die Karte gesperrt.
 
 ## Track-Sync-Dialog
 
