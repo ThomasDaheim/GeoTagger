@@ -28,9 +28,12 @@ Work in progress. Available so far:
 * track list: GPX files of the folder, check to load and show them on the map, "+ GPX" for files from elsewhere
   * colours from the GPX file (gpx_style or Garmin DisplayColor), each segment as its own line
   * the points of the selected tracks with time, coordinates, distance and elevation - selecting one centres the map
+* "Find place": country code, country, state, city and sublocation from the coordinates with [GeoNames](https://www.geonames.org) (free user account) or [Mapbox](https://www.mapbox.com) (access token) - set in the preferences, together with the language of the names
+  * for the selected files (their place is overwritten), or without selection for all listed files without place
+  * one request per ~100 m cell, cached for the session; one undo step per run
 * GPX reading and track sync logic (the sync dialog follows)
 
-Planned next: geo services (reverse geocoding, altitude, time zone) and the track sync dialog.
+Planned next: altitude (SRTM, openrouteservice) and the track sync dialog. The time zone isn't derived from the coordinates - it comes from the file, the track sync or the edit dialog.
 
 ## Notes
 

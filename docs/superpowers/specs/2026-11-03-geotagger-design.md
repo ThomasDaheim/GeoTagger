@@ -39,9 +39,9 @@ Videos durchlaufen denselben Ablauf.
   - Marker aller Dateien mit Koordinaten, gebündelt (Clustering).
   - Geladene Tracks werden angezeigt.
   - Koordinaten setzen per Drag & Drop aus der Liste, durch Verschieben eines Markers oder per Rechtsklick für die Auswahl.
-- Ortsinformationen per Reverse-Geocoding. Die Dienste sind dieselben wie in GPXEditor (Mapbox) plus GeoNames (`api.geonames.org`, mit Benutzername).
-- Höhe per openrouteservice oder lokalen SRTM-Daten, wahlweise aus dem Track.
-- Zeitzone offline aus den Koordinaten.
+- Ortsinformationen per Reverse-Geocoding: GeoNames (`findNearbyPlaceName` über `secure.geonames.org`, mit Benutzername) oder Mapbox (Geocoding v6, mit Access-Token), wählbar in den Einstellungen. GeoNames liefert keine Sublocation.
+- Höhe per openrouteservice oder lokalen SRTM-Daten, wahlweise aus dem Track (Plan 5b).
+- Zeitzone: aus der Datei, dem Sync-Dialog oder dem Bearbeiten-Dialog, **nicht** aus den Koordinaten. Entscheidung vom 15.11.2026: Bei DSLR-Fotos stimmt die Zeitzone des Ortes nur, wenn die Kamerauhr auf Ortszeit stand.
 - Dialog „Bearbeiten“: editierbare Felder für die Auswahl. Bei Mehrfachauswahl wird „(different)“ angezeigt, und eine Eingabe gilt für alle ausgewählten Dateien. OK ist ein Undo-Schritt.
 - Reiter „Bild-Info (ExifTool)“: alle rohen Tags der ausgewählten Datei, nur lesbar.
 - Track-Liste:
@@ -49,7 +49,7 @@ Videos durchlaufen denselben Ablauf.
   - Jeder Track lässt sich einzeln laden und auf der Karte ein- und ausblenden.
   - Weitere GPX-Dateien lassen sich hinzufügen.
 - Änderungen werden gesammelt und erst beim Speichern geschrieben. Undo und Redo kommen aus JavaHelper.
-- Einstellungen: ExifTool-Pfad, API-Schlüssel und Benutzernamen, Dienstauswahl, zuletzt verwendete Sync-Parameter.
+- Einstellungen: ExifTool-Pfad; für „Ort ermitteln“ Dienst (GeoNames oder Mapbox), GeoNames-Benutzer, Mapbox-Token und Sprache der Ortsnamen (z. B. `de`, leer = Vorgabe des Dienstes); später Schlüssel für die Höhe und die zuletzt verwendeten Sync-Parameter.
 
 ### Bewusst nicht in Version 1
 
@@ -71,7 +71,7 @@ Videos durchlaufen denselben Ablauf.
 | Breite, Länge | Track-Sync, Karte, manuell | EXIF GPS bzw. QuickTime GPS, XMP `exif:GPS*` |
 | Höhe | Track, openrouteservice, SRTM, manuell | EXIF `GPSAltitude` und `GPSAltitudeRef`, XMP |
 | Ländercode, Land, Region, Ort, Sublocation | Reverse-Geocoding, manuell | IPTC (`Country-PrimaryLocationCode`, `Country-PrimaryLocationName`, `Province-State`, `City`, `Sub-location`) und XMP (`photoshop:*`, `Iptc4xmpCore:*`), jeweils konsistent |
-| Zeitzone der Aufnahme | Offline-Zeitzonenabfrage aus den Koordinaten, oder Kamera-Zeitzone aus dem Sync-Dialog | EXIF `OffsetTimeOriginal`. Bei Videos und Sidecar-Dateien wird sie in Version 1 nicht geschrieben, weil es dafür kein Standard-Tag gibt, das die Aufnahmezeit unberührt lässt. |
+| Zeitzone der Aufnahme | Kamera-Zeitzone aus dem Sync-Dialog, manuell | EXIF `OffsetTimeOriginal`. Bei Videos und Sidecar-Dateien wird sie in Version 1 nicht geschrieben, weil es dafür kein Standard-Tag gibt, das die Aufnahmezeit unberührt lässt. |
 
 Die konkrete Tag-Zuordnung je Format liegt gekapselt im Paket `metadata` und wird über Integrationstests abgesichert.
 
@@ -105,7 +105,7 @@ Build: Gradle, Java 25 und JavaFX 25.0.1, so wie in GPXEditor und JavaHelper.
 | Paket | Inhalt | Herkunft |
 |---|---|---|
 | `tf.geo.map` | Leaflet-Karte in einer WebView: Layer, Marker, Cluster, Polylines für Tracks, Callbacks von JS nach Java (Klick, Drag, Rechtsklick) | `tf.gpx.edit.leafletmap` und `resources/leaflet/` aus GPXEditor, von `TrackMap` und den GPXEditor-Preferences gelöst |
-| `tf.geo.service` | Schnittstellen `ReverseGeocoder`, `ElevationProvider`, `TimeZoneLookup`. Implementierungen: Mapbox, GeoNames (neu), openrouteservice, SRTM, offline-timezone | `tf.gpx.edit.mapbox`, `tf.gpx.edit.elevation`, `TimeZoneProvider` aus GPXEditor |
+| `tf.geo.service` | Schnittstellen `ReverseGeocoder` (GeoNames neu, Mapbox Geocoding v6) und `ElevationProvider` (openrouteservice, SRTM; Plan 5b). Ein Aufruf ist eine Anfrage; Cache, Drosselung und Wiederholung macht der Aufrufer. HTTP über `HttpTransport`, damit Tests ohne Netz laufen. | `tf.gpx.edit.mapbox`, `tf.gpx.edit.elevation` aus GPXEditor |
 GeoHelper kennt GeoTagger nicht. Nur was die App braucht, wandert in die Library.
 
 ### ExifToolHelper
@@ -142,7 +142,7 @@ Die Abhängigkeiten zeigen nur in eine Richtung: `ui` → `enrich` / `sync` / `m
 
 Das Layout ist an GeoSetter angelehnt:
 
-- **Werkzeugleiste:** Ordnerpfad, Häkchen „Unterordner“, „Edit…“, Track-Sync, Ort ermitteln, Höhe ermitteln, Undo, Redo und „Speichern (n)“ mit der Anzahl ungespeicherter Dateien. Eigene Icon-Leisten je Bereich kommen später.
+- **Werkzeugleiste:** Ordnerpfad, Häkchen „Unterordner“, „Edit…“, „Find place“ (Ort ermitteln), Track-Sync, Höhe ermitteln, Undo, Redo und „Speichern (n)“ mit der Anzahl ungespeicherter Dateien. Eigene Icon-Leisten je Bereich kommen später.
 - **Links oben:**
   - Statusfilter als Chips mit Anzahl.
   - Darunter die Dateiliste. Spalten: Name, Aufnahmezeit, Koordinaten (Grad/Min/Sek, z. B. `N46°40'48.05"; E11°5'28.61"`), Höhe, Ländercode, Land, Region, Ort, Sublocation, Zeitzone.
@@ -155,7 +155,9 @@ Das Layout ist an GeoSetter angelehnt:
 - **Statusleiste:** „n files (m with coordinates) - k selected“; die Anzahl ungespeicherter Dateien steht auf „Speichern (n)“.
 - **Schrift:** 11 px.
 
-Aktionen der Werkzeugleiste wirken auf die Auswahl. Ist nichts ausgewählt, wirken sie auf alle gefilterten Dateien, für die die Aktion sinnvoll ist. „Ort ermitteln“ läuft zum Beispiel über alle Dateien mit Koordinaten, aber ohne Ort.
+Aktionen der Werkzeugleiste wirken auf die Auswahl. Ist nichts ausgewählt, wirken sie auf alle gefilterten Dateien, für die die Aktion sinnvoll ist. „Ort ermitteln“ läuft zum Beispiel über alle Dateien mit Koordinaten, aber ohne Ort. Mit Auswahl überschreibt die Aktion vorhandene Werte der ausgewählten Dateien (Entscheidung vom 15.11.2026). Ausnahme: „Edit…“ braucht immer eine Auswahl.
+
+Nach dem Laden eines Ordners ist die Karte auf alle Dateien eingepasst. Die erste Datei wird für die Vorschau automatisch ausgewählt, verschiebt die Karte dabei aber nicht.
 
 ## Track-Sync-Dialog
 
@@ -204,11 +206,12 @@ Aktionen der Werkzeugleiste wirken auf die Auswahl. Ist nichts ausgewählt, wirk
    - GPX-Dateien landen in der Track-Liste.
 2. **Bearbeiten:** Jede Aktion wird als Undo-Aktion ausgeführt und ändert nur `pending`.
 3. **Anreichern**
-   - Koordinaten werden auf ein Raster von etwa 100 m gerundet und zusammengefasst.
-   - Pro Raster gibt es eine Anfrage, deren Ergebnis im Speicher zwischengespeichert wird.
-   - Die Anfragen werden je Dienst gedrosselt.
-   - Die Ergebnisse landen in `pending`, als ein Undo-Schritt pro Lauf.
-   - Die Zeitzone wird nur ergänzt, wo noch keine vorhanden ist. Ein vorhandenes `OffsetTimeOriginal` oder eine Zeitzone aus dem Sync-Dialog hat Vorrang.
+   - Koordinaten werden auf ein Raster von 0,001° (etwa 100 m) gerundet und zusammengefasst; abgefragt wird die Zellmitte.
+   - Pro Rasterzelle gibt es eine Anfrage, deren Ergebnis für die Sitzung im Speicher bleibt, getrennt je Dienst und Sprache. Fehlgeschlagene Zellen werden nicht gespeichert.
+   - Die Anfragen werden je Dienst gedrosselt: GeoNames 250 ms, Mapbox 100 ms Pause.
+   - Vorübergehende Fehler werden nach 1, 2 und 4 s wiederholt. Ein erschöpftes Kontingent oder falsche Zugangsdaten brechen den Lauf ab; was bis dahin gefunden wurde, wird übernommen.
+   - Ein gefundener Ort setzt alle fünf Ortsfelder; Teile, die der Dienst nicht liefert, werden geleert.
+   - Die Ergebnisse landen in `pending`, als ein Undo-Schritt pro Lauf. Danach zeigt die Statusleiste eine Zusammenfassung, bei Fehlern zusätzlich ein Hinweis.
 4. **Speichern**
    - Je geänderter Datei werden die Ziel-Tags für ihr Format gebildet und über ExifTool geschrieben.
    - Danach liest die App die Datei neu ein, setzt `original` neu und leert `pending`.
