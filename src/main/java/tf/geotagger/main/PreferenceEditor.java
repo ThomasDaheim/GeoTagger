@@ -29,7 +29,9 @@ import java.io.File;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import javafx.geometry.Pos;
+import javafx.scene.Node;
 import javafx.scene.control.Button;
+import javafx.scene.control.ChoiceBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.ColumnConstraints;
@@ -38,20 +40,27 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.stage.FileChooser;
 import javafx.stage.Modality;
+import javafx.util.StringConverter;
 import jfxtras.styles.jmetro.JMetro;
 import jfxtras.styles.jmetro.Style;
 import tf.exiftool.ExifToolException;
+import tf.geotagger.enrich.PlaceService;
 import tf.geotagger.metadata.ExifToolLocator;
 import tf.helper.javafx.AbstractStage;
 
 /**
- * Preferences of GeoTagger - for now the ExifTool executable. Built in code like GPXEditor's PreferenceEditor.
+ * Preferences of GeoTagger: the ExifTool executable and the service for "Find place". Built in code like GPXEditor's
+ * PreferenceEditor.
  */
 public class PreferenceEditor extends AbstractStage {
     private static final PreferenceEditor INSTANCE = new PreferenceEditor();
 
     private final TextField exifToolPath = new TextField();
     private final Label exifToolCheck = new Label();
+    private final ChoiceBox<PlaceService> placeService = new ChoiceBox<>();
+    private final TextField geoNamesUsername = new TextField();
+    private final TextField mapboxAccessToken = new TextField();
+    private final TextField placeLanguage = new TextField();
 
     private PreferenceEditor() {
         initViewer();
@@ -92,9 +101,36 @@ public class PreferenceEditor extends AbstractStage {
         grid.add(exifToolCheck, 1, 1, 2, 1);
         GridPane.setMargin(exifToolCheck, INSET_TOP);
 
+        // "Find place"
+        placeService.getItems().setAll(PlaceService.values());
+        placeService.setConverter(new StringConverter<>() {
+            @Override
+            public String toString(PlaceService service) {
+                return service == null ? "" : service.label();
+            }
+
+            @Override
+            public PlaceService fromString(String text) {
+                return null;
+            }
+        });
+        addRow(grid, 2, "Place service:", placeService);
+        geoNamesUsername.setPrefColumnCount(30);
+        addRow(grid, 3, "GeoNames user:", geoNamesUsername);
+        mapboxAccessToken.setPrefColumnCount(30);
+        addRow(grid, 4, "Mapbox access token:", mapboxAccessToken);
+        placeLanguage.setPrefColumnCount(5);
+        final HBox language = new HBox(8, placeLanguage, new Label("e.g. de, en - empty: service default"));
+        language.setAlignment(Pos.CENTER_LEFT);
+        addRow(grid, 5, "Language of places:", language);
+
         final Button saveButton = new Button("Save");
         saveButton.setOnAction(event -> {
             GeoTaggerPreferences.EXIFTOOL_PATH.put(exifToolPath.getText().trim());
+            GeoTaggerPreferences.PLACE_SERVICE.put(placeService.getValue().name());
+            GeoTaggerPreferences.GEONAMES_USERNAME.put(geoNamesUsername.getText().trim());
+            GeoTaggerPreferences.MAPBOX_ACCESS_TOKEN.put(mapboxAccessToken.getText().trim());
+            GeoTaggerPreferences.PLACE_LANGUAGE.put(placeLanguage.getText().trim());
             close();
         });
         setActionAccelerator(saveButton);
@@ -116,6 +152,10 @@ public class PreferenceEditor extends AbstractStage {
     public boolean editPreferences() {
         exifToolPath.setText(GeoTaggerPreferences.EXIFTOOL_PATH.getAsString());
         exifToolCheck.setText("");
+        placeService.setValue(PlaceServiceFactory.service());
+        geoNamesUsername.setText(GeoTaggerPreferences.GEONAMES_USERNAME.getAsString());
+        mapboxAccessToken.setText(GeoTaggerPreferences.MAPBOX_ACCESS_TOKEN.getAsString());
+        placeLanguage.setText(GeoTaggerPreferences.PLACE_LANGUAGE.getAsString());
         showAndWait();
         return wasActionButtonPressed();
     }
@@ -135,6 +175,15 @@ public class PreferenceEditor extends AbstractStage {
             exifToolPath.setText(selected.getAbsolutePath());
             check();
         }
+    }
+
+    // label in the first column, the control over the other two
+    private static void addRow(GridPane grid, int row, String label, Node control) {
+        final Label rowLabel = new Label(label);
+        grid.add(rowLabel, 0, row);
+        GridPane.setMargin(rowLabel, INSET_TOP);
+        grid.add(control, 1, row, 2, 1);
+        GridPane.setMargin(control, INSET_TOP);
     }
 
     private void check() {

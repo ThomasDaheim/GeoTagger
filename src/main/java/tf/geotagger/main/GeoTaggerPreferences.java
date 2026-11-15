@@ -57,6 +57,11 @@ public enum GeoTaggerPreferences implements IPreferencesStore {
     RECENT_TRACK_DIVIDER_POS("recentTrackDividerPos", Double.toString(0.45), Double.class),
 
     EXIFTOOL_PATH("exifToolPath", "", String.class),
+    // "Find place": name of a PlaceService, its credentials and the language of the names ("" = default of the service)
+    PLACE_SERVICE("placeService", "GEONAMES", String.class),
+    GEONAMES_USERNAME("geoNamesUsername", "", String.class),
+    MAPBOX_ACCESS_TOKEN("mapboxAccessToken", "", String.class),
+    PLACE_LANGUAGE("placeLanguage", "de", String.class),
     RECENT_FOLDER("recentFolder", System.getProperty("user.home"), String.class),
     INCLUDE_SUBFOLDERS("includeSubfolders", Boolean.toString(false), Boolean.class);
 
