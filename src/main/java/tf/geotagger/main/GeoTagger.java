@@ -206,6 +206,8 @@ public class GeoTagger implements Initializable {
     private volatile boolean busy = false;
     // true while refreshFiles() restores the selection - the selection listeners ignore that
     private boolean restoringSelection = false;
+    // false while the first file is selected automatically after loading - the map then shows all files
+    private boolean panToSelection = true;
     // counts loadFolder calls - results of an older one are dropped
     private int loadGeneration = 0;
     // DoUndoManager is a singleton - its listener is removed in stop(), otherwise it keeps this window alive
@@ -466,7 +468,7 @@ public class GeoTagger implements Initializable {
         showImageInfo();
         mapPane.showFiles(files, selected);
         // several files: the user picks them - the map stays where it is
-        if (selected.size() == 1) {
+        if (selected.size() == 1 && panToSelection) {
             mapPane.panToFile(selected.get(0));
         }
         updateStatus();
@@ -811,7 +813,13 @@ public class GeoTagger implements Initializable {
             stage.setTitle(GeoTaggerManager.TITLE + " - " + newFolder);
             GeoTaggerPreferences.getRecentFolders().addRecentFile(newFolder.toString());
             updateRecentFolders();
-            select(0);
+            // the first file for the preview - the map stays fitted to all files (user decision 15.11.2026)
+            panToSelection = false;
+            try {
+                select(0);
+            } finally {
+                panToSelection = true;
+            }
         });
         task.setOnFailed(event -> {
             if (generation != loadGeneration) {

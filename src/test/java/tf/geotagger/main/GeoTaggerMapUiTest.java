@@ -143,6 +143,26 @@ class GeoTaggerMapUiTest {
     }
 
     @Test
+    void loadingShowsAllFilesOnTheMap(FxRobot robot) throws TimeoutException {
+        // user feedback: USA_2024 with some photos from Munich - the automatic selection of the first file moved the map
+        final Path munich = TestFiles.image(dir, "a.jpg");
+        final Path lasVegas = TestFiles.image(dir, "b.jpg");
+        try (ExifTool tool = new ExifTool(exifTool)) {
+            tool.execute(List.of("-overwrite_original", "-GPS:GPSLatitude#=48.14", "-GPS:GPSLatitudeRef#=N",
+                    "-GPS:GPSLongitude#=11.58", "-GPS:GPSLongitudeRef#=E", munich.toString()));
+            tool.execute(List.of("-overwrite_original", "-GPS:GPSLatitude#=36.1", "-GPS:GPSLatitudeRef#=N",
+                    "-GPS:GPSLongitude#=115.17", "-GPS:GPSLongitudeRef#=W", lasVegas.toString()));
+        }
+        robot.interact(() -> controller.loadFolder(dir, false));
+        UiTestSupport.waitUntilIdle(controller);
+        UiTestSupport.waitUntilMapReady(controller);
+
+        assertEquals(Boolean.TRUE, js(robot, "myMap.getBounds().contains([48.14, 11.58]) && myMap.getBounds().contains([36.1, -115.17])"));
+        // the first file is still selected automatically
+        assertEquals(List.of(fileNamed(table(robot), "a.jpg")), List.copyOf(table(robot).getSelectionModel().getSelectedItems()));
+    }
+
+    @Test
     void markersShownForFilesWithCoordinates(FxRobot robot) throws TimeoutException {
         loadImages(robot);
         assertEquals(2, number(js(robot, "geoMarkerCount()")));
