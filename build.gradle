@@ -72,7 +72,7 @@ dependencies {
     implementation "org.openjfx:jdk-jsobject:$javafxVersion:$fxPlatform"
 
     // our own helper libraries
-    implementation 'tf.JavaHelper:JavaHelper:1.17'
+    implementation 'tf.JavaHelper:JavaHelper:1.18'
     implementation 'tf.ExifToolHelper:ExifToolHelper:0.1'
     implementation 'tf.GeoHelper:GeoHelper:0.1'
 
