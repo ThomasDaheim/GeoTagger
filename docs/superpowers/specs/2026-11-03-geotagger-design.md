@@ -50,7 +50,7 @@ Videos durchlaufen denselben Ablauf.
   - Weitere GPX-Dateien lassen sich hinzufügen. Sie bleiben in der Liste, wenn ein anderer Ordner geöffnet wird; nur die GPX-Dateien des alten Ordners werden ersetzt.
 - Das Häkchen „Unterordner“ lädt den geöffneten Ordner sofort neu (nach Rückfrage bei ungespeicherten Änderungen).
 - Änderungen werden gesammelt und erst beim Speichern geschrieben. Undo und Redo kommen aus JavaHelper.
-- Einstellungen: ExifTool-Pfad; für „Ort ermitteln“ Dienst (GeoNames oder Mapbox), GeoNames-Benutzer, Mapbox-Token und Sprache der Ortsnamen (z. B. `de`, leer = Vorgabe des Dienstes); später Schlüssel für die Höhe und die zuletzt verwendeten Sync-Parameter.
+- Einstellungen: ExifTool-Pfad; für „Ort ermitteln“ Dienst (GeoNames oder Mapbox), GeoNames-Benutzer, Mapbox-Token und Sprache der Ortsnamen (z. B. `de`, leer = Vorgabe des Dienstes), Umkreis für die Ortsauswahl und ein Knopf „Check“, der den gewählten Dienst mit den eingetragenen Werten abfragt; später Schlüssel für die Höhe und die zuletzt verwendeten Sync-Parameter.
 
 ### Bewusst nicht in Version 1
 
@@ -213,6 +213,11 @@ Nach dem Laden eines Ordners ist die Karte auf alle Dateien eingepasst. Die erst
    - Vorübergehende Fehler werden nach 1, 2 und 4 s wiederholt. Ein erschöpftes Kontingent oder falsche Zugangsdaten brechen den Lauf ab; was bis dahin gefunden wurde, wird übernommen.
    - Ein gefundener Ort setzt alle fünf Ortsfelder; Teile, die der Dienst nicht liefert, werden geleert. Ausnahmen (Rückmeldung vom 16.11.2026): Der Ländername kommt aus dem Ländercode in der gewählten Sprache (z. B. „Vereinigte Staaten“), und ohne Sublocation vom Dienst bleibt die alte Sublocation, wenn der Ort gleich bleibt.
    - GeoNames: Ort ist der nächste besiedelte Ort, der kein Stadtteil ist; ein Stadtteil (PPLX, z. B. Eixample in Barcelona) wird Sublocation, wenn er der nächste Ort überhaupt ist.
+   - **Auswahl wie GeoSetter (Plan 5c):** Liegen mehrere Orte bzw. Stadtteile innerhalb des Umkreises aus den Einstellungen (Standard 1 km, 0 = nie fragen), fragt nach dem Lauf je Gruppe gleicher Kandidaten ein Fenster „Choose place“: Vorschau, Liste „Region; Ort; Stadtteil (Entfernung)“, editierbare Felder Region, Ort, Sublocation.
+     - „Use“ übernimmt die Auswahl für diese Dateien, „Cancel“ lässt sie unverändert.
+     - „Use for all“ (nur wenn weitere Gruppen folgen) beantwortet den Rest des Laufs ohne weitere Fenster. Eine andere Gruppe bekommt die Auswahl aber nur, wenn der gewählte Ort auch unter ihren Kandidaten ist, sonst ihre beste Antwort.
+     - Angeboten werden nur Orte und Stadtteile, keine Firmen oder Gebäude (anders als GeoSetter). Mapbox liefert nur einen Treffer, dort wird nie gefragt.
+     - Alles bleibt ein Undo-Schritt.
    - Die Ergebnisse landen in `pending`, als ein Undo-Schritt pro Lauf. Danach zeigt die Statusleiste eine Zusammenfassung, bei Fehlern zusätzlich ein Hinweis.
 4. **Speichern**
    - Je geänderter Datei werden die Ziel-Tags für ihr Format gebildet und über ExifTool geschrieben.

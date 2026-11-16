@@ -30,7 +30,9 @@ Work in progress. Available so far:
   * the points of the selected tracks with time, coordinates, distance and elevation - selecting one centres the map
 * "Find place": country code, country, state, city and sublocation from the coordinates with [GeoNames](https://www.geonames.org) (free user account) or [Mapbox](https://www.mapbox.com) (access token) - set in the preferences, together with the language of the names
   * for the selected files (their place is overwritten), or without selection for all listed files without place
+  * several districts or places nearby (GeoNames): a window to choose like GeoSetter's, with distances and editable fields - "Use for all" for the rest of the run
   * one request per ~100 m cell, cached for the session; one undo step per run
+  * "Check" in the preferences tries the service with the values typed in
 * GPX reading and track sync logic (the sync dialog follows)
 
 Planned next: altitude (SRTM, openrouteservice) and the track sync dialog. The time zone isn't derived from the coordinates - it comes from the file, the track sync or the edit dialog.
