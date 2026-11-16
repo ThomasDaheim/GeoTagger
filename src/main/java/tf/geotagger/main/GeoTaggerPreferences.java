@@ -62,6 +62,8 @@ public enum GeoTaggerPreferences implements IPreferencesStore {
     GEONAMES_USERNAME("geoNamesUsername", "", String.class),
     MAPBOX_ACCESS_TOKEN("mapboxAccessToken", "", String.class),
     PLACE_LANGUAGE("placeLanguage", "de", String.class),
+    // more than one place (e.g. districts) within this distance in km: the user chooses - 0 never asks
+    PLACE_CHOICE_RADIUS_KM("placeChoiceRadiusKm", "1.0", Double.class),
     RECENT_FOLDER("recentFolder", System.getProperty("user.home"), String.class),
     INCLUDE_SUBFOLDERS("includeSubfolders", Boolean.toString(false), Boolean.class);
 

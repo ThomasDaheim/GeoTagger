@@ -42,6 +42,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.ResourceBundle;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -102,6 +103,7 @@ import tf.geo.service.ReverseGeocoder;
 import tf.geotagger.edit.ChangeFieldsAction;
 import tf.geotagger.edit.FieldText;
 import tf.geotagger.enrich.GridCell;
+import tf.geotagger.enrich.PlaceChoices;
 import tf.geotagger.enrich.PlaceEnricher;
 import tf.geotagger.enrich.PlaceRun;
 import tf.geotagger.enrich.PlaceSummary;
@@ -116,6 +118,7 @@ import tf.geotagger.model.CaptureTime;
 import tf.geotagger.model.Field;
 import tf.geotagger.model.MediaFile;
 import tf.geotagger.model.MediaFilter;
+import tf.geotagger.preview.Preview;
 import tf.geotagger.preview.PreviewProvider;
 import tf.helper.doundo.DoUndoManager;
 import tf.helper.javafx.ShowAlerts;
@@ -515,12 +518,12 @@ public class GeoTagger implements Initializable {
         final Map<GridCell, List<NearbyPlace>> cache = placeCaches.computeIfAbsent(PlaceServiceFactory.cacheKey(),
                 key -> new ConcurrentHashMap<>());
         final String language = PlaceServiceFactory.language();
+        final Double choiceRadiusKm = GeoTaggerPreferences.PLACE_CHOICE_RADIUS_KM.getAsType();
         final Task<PlaceRun> task = new Task<>() {
             @Override
             protected PlaceRun call() throws InterruptedException {
                 updateMessage("Finding places with " + geocoder.name() + " ...");
-                // the choice among several places nearby follows in plan 5c task 4 - until then never asked
-                return new PlaceEnricher(geocoder, cache, Thread::sleep, 0).run(scope, (done, total) -> {
+                return new PlaceEnricher(geocoder, cache, Thread::sleep, choiceRadiusKm).run(scope, (done, total) -> {
                     updateProgress(done, total);
                     updateMessage("Finding places: " + done + " / " + total);
                 });
@@ -528,7 +531,9 @@ public class GeoTagger implements Initializable {
         };
         task.setOnSucceeded(event -> {
             finishTask();
-            final PlaceRun run = task.getValue();
+            // several places nearby: the user chooses, cancelled files stay as they are
+            final PlaceRun found = task.getValue();
+            final PlaceRun run = new PlaceRun(choosePlaces(found), found.notFound(), found.failed(), found.problem());
             applyPlaces(run, language);
             final String summary = PlaceSummary.text(run);
             statusLabel.setText(summary);
@@ -559,6 +564,55 @@ public class GeoTagger implements Initializable {
             return selected.stream().filter(MediaFile::hasCoordinates).toList();
         }
         return listed.stream().filter(MediaFile::hasCoordinates).filter(file -> !file.hasPlace()).toList();
+    }
+
+    /**
+     * One dialog per group of files with the same places nearby (like GeoSetter's "Ortsdaten auswählen"). "Use for all"
+     * answers the remaining groups without dialog, see PlaceChoices.forOtherGroup; "Cancel" leaves the group unchanged.
+     *
+     * @param run result of the lookup
+     * @return the place per file after the choices - cancelled files left out
+     */
+    private Map<MediaFile, Place> choosePlaces(PlaceRun run) {
+        final Map<MediaFile, Place> places = new LinkedHashMap<>(run.places());
+        final List<List<MediaFile>> groups = PlaceChoices.groups(run.choices());
+        Place forAll = null;
+        for (int i = 0; i < groups.size(); i++) {
+            final List<MediaFile> group = groups.get(i);
+            final List<NearbyPlace> candidates = run.choices().get(group.get(0));
+            if (forAll != null) {
+                final Place place = PlaceChoices.forOtherGroup(forAll, candidates);
+                group.forEach(file -> places.put(file, place));
+                continue;
+            }
+            final Optional<PlaceChoiceDialog.Choice> choice = PlaceChoiceDialog.show(stage, group, candidates,
+                    previewOf(group.get(0)), i < groups.size() - 1);
+            if (choice.isEmpty()) {
+                group.forEach(places::remove);
+            } else {
+                group.forEach(file -> places.put(file, choice.get().place()));
+                if (choice.get().forAll()) {
+                    forAll = choice.get().place();
+                }
+            }
+        }
+        return places;
+    }
+
+    // read in the worker thread - for RAW files ExifTool extracts the embedded JPEG
+    private CompletableFuture<Optional<Preview>> previewOf(MediaFile file) {
+        final PreviewProvider provider = previewProvider;
+        if (provider == null) {
+            return CompletableFuture.completedFuture(Optional.empty());
+        }
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                return provider.preview(file.path());
+            } catch (RuntimeException ex) {
+                // no preview - the dialog works without
+                return Optional.<Preview>empty();
+            }
+        }, worker);
     }
 
     // a found place sets the place fields - see PlaceValues for the country name and the sublocation

@@ -33,8 +33,11 @@ import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import javafx.scene.Node;
 import javafx.scene.control.Label;
+import javafx.scene.control.ListView;
 import javafx.scene.control.TableView;
+import javafx.scene.control.TextField;
 import javafx.stage.Stage;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
@@ -48,6 +51,7 @@ import org.testfx.framework.junit5.Stop;
 import org.testfx.util.WaitForAsyncUtils;
 import tf.exiftool.ExifTool;
 import tf.geo.LatLon;
+import tf.geo.service.NearbyPlace;
 import tf.geo.service.Place;
 import tf.geo.service.ReverseGeocoder;
 import tf.geotagger.enrich.FakeGeocoder;
@@ -139,6 +143,100 @@ class GeoTaggerPlaceUiTest {
 
     private static String status(FxRobot robot) {
         return robot.lookup("#statusLabel").queryAs(Label.class).getText();
+    }
+
+    // places around Plaça de Catalunya - the first is the best answer
+    private static final List<NearbyPlace> BARCELONA = List.of(
+            new NearbyPlace(new Place("ES", "Spanien", "Katalonien", "Barcelona", "Eixample"), 0.65),
+            new NearbyPlace(new Place("ES", "Spanien", "Katalonien", "Barcelona", "el Raval"), 0.74),
+            new NearbyPlace(new Place("ES", "Spanien", "Katalonien", "Barcelona", null), 0.94));
+    // a bit further north - another grid cell, another list
+    private static final List<NearbyPlace> GRACIA = List.of(
+            new NearbyPlace(new Place("ES", "Spanien", "Katalonien", "Barcelona", "Gràcia"), 0.2),
+            new NearbyPlace(new Place("ES", "Spanien", "Katalonien", "Barcelona", "Eixample"), 0.8));
+
+    // runs Find place and waits for the dialog "Choose place"
+    private static void findPlacesAndWaitForChoice(FxRobot robot) throws TimeoutException {
+        robot.clickOn("#findPlaceButton");
+        waitForChoice(robot);
+    }
+
+    private static void waitForChoice(FxRobot robot) throws TimeoutException {
+        WaitForAsyncUtils.waitFor(10, TimeUnit.SECONDS,
+                () -> robot.lookup("#placeChoiceUse").tryQuery().map(Node::isVisible).orElse(false));
+        WaitForAsyncUtils.waitForFxEvents();
+    }
+
+    @Test
+    void severalDistrictsAskForAChoice(FxRobot robot) throws TimeoutException {
+        loadImages(robot);
+        robot.interact(() -> controller.setPlaceService(() -> new FakeGeocoder(Duration.ZERO, BARCELONA)));
+        selectOnly(robot, "a.jpg");
+        findPlacesAndWaitForChoice(robot);
+        final ListView<?> list = robot.lookup("#placeChoiceList").queryListView();
+        assertEquals(3, list.getItems().size());
+
+        robot.interact(() -> list.getSelectionModel().select(1));
+        robot.clickOn("#placeChoiceUse");
+        UiTestSupport.waitUntilIdle(controller);
+
+        final MediaFile a = fileNamed(robot, "a.jpg");
+        assertEquals("Barcelona", a.value(Field.CITY));
+        assertEquals("el Raval", a.value(Field.SUBLOCATION));
+    }
+
+    @Test
+    void typedSublocationIsUsed(FxRobot robot) throws TimeoutException {
+        loadImages(robot);
+        robot.interact(() -> controller.setPlaceService(() -> new FakeGeocoder(Duration.ZERO, BARCELONA)));
+        selectOnly(robot, "a.jpg");
+        findPlacesAndWaitForChoice(robot);
+
+        final TextField sublocation = robot.lookup("#placeChoiceSublocation").queryAs(TextField.class);
+        robot.clickOn(sublocation);
+        robot.interact(sublocation::selectAll);
+        robot.write("Sant Antoni");
+        robot.clickOn("#placeChoiceUse");
+        UiTestSupport.waitUntilIdle(controller);
+
+        assertEquals("Sant Antoni", fileNamed(robot, "a.jpg").value(Field.SUBLOCATION));
+    }
+
+    @Test
+    void cancelKeepsTheseFiles(FxRobot robot) throws TimeoutException {
+        loadImages(robot);
+        // a first, b second - two cells with different places nearby, two dialogs
+        robot.interact(() -> controller.setPlaceService(() -> new FakeGeocoder(Duration.ZERO, BARCELONA, GRACIA)));
+        selectOnly(robot, "a.jpg", "b.jpg");
+        findPlacesAndWaitForChoice(robot);
+        // more to ask after this one: "Use for all" is offered
+        assertTrue(robot.lookup("#placeChoiceUseForAll").tryQuery().map(Node::isVisible).orElse(false));
+
+        robot.clickOn("#placeChoiceCancel");
+        waitForChoice(robot);
+        assertFalse(robot.lookup("#placeChoiceUseForAll").tryQuery().map(Node::isVisible).orElse(false));
+        robot.clickOn("#placeChoiceUse");
+        UiTestSupport.waitUntilIdle(controller);
+
+        assertFalse(fileNamed(robot, "a.jpg").hasPlace());
+        final MediaFile b = fileNamed(robot, "b.jpg");
+        assertEquals("Gràcia", b.value(Field.SUBLOCATION));
+        // one undo step for the whole run
+        robot.clickOn("#undoButton");
+        assertEquals("Bozen", b.value(Field.CITY));
+    }
+
+    @Test
+    void radiusZeroNeverAsks(FxRobot robot) throws TimeoutException {
+        GeoTaggerPreferences.PLACE_CHOICE_RADIUS_KM.put(0.0);
+        loadImages(robot);
+        robot.interact(() -> controller.setPlaceService(() -> new FakeGeocoder(Duration.ZERO, BARCELONA)));
+        selectOnly(robot, "a.jpg");
+
+        findPlaces(robot);
+
+        assertFalse(robot.lookup("#placeChoiceUse").tryQuery().isPresent());
+        assertEquals("Eixample", fileNamed(robot, "a.jpg").value(Field.SUBLOCATION));
     }
 
     @Test
