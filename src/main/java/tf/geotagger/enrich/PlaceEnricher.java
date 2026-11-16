@@ -144,7 +144,26 @@ public final class PlaceEnricher {
         final List<NearbyPlace> close = choiceRadiusKm <= 0 ? List.of()
                 : nearby.stream().filter(place -> place.distanceKm() <= choiceRadiusKm).toList();
         if (close.size() > 1) {
-            files.forEach(file -> choices.put(file, close));
+            final List<NearbyPlace> offered = withCitiesAlone(close, nearby);
+            files.forEach(file -> choices.put(file, offered));
         }
+    }
+
+    // each city of the choice also without district - its centre is often further away than the radius
+    private static List<NearbyPlace> withCitiesAlone(List<NearbyPlace> close, List<NearbyPlace> nearby) {
+        final List<NearbyPlace> offered = new ArrayList<>(close);
+        for (NearbyPlace entry : close) {
+            if (entry.place().city() == null || entry.place().sublocation() == null) {
+                continue;
+            }
+            final Place alone = new Place(entry.place().countryCode(), entry.place().country(), entry.place().state(),
+                    entry.place().city(), null);
+            if (offered.stream().noneMatch(known -> known.place().equals(alone))) {
+                // the service's entry of the city with its distance, otherwise made up from the district
+                offered.add(nearby.stream().filter(other -> other.place().equals(alone)).findFirst()
+                        .orElse(new NearbyPlace(alone, entry.distanceKm())));
+            }
+        }
+        return List.copyOf(offered);
     }
 }

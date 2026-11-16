@@ -35,12 +35,14 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.EnumMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.ResourceBundle;
+import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -533,8 +535,9 @@ public class GeoTagger implements Initializable {
             finishTask();
             // several places nearby: the user chooses, cancelled files stay as they are
             final PlaceRun found = task.getValue();
-            final PlaceRun run = new PlaceRun(choosePlaces(found), found.notFound(), found.failed(), found.problem());
-            applyPlaces(run, language);
+            final Set<MediaFile> chosen = new HashSet<>();
+            final PlaceRun run = new PlaceRun(choosePlaces(found, chosen), found.notFound(), found.failed(), found.problem());
+            applyPlaces(run, language, chosen);
             final String summary = PlaceSummary.text(run);
             statusLabel.setText(summary);
             if (PlaceSummary.hasProblems(run)) {
@@ -571,9 +574,10 @@ public class GeoTagger implements Initializable {
      * answers the remaining groups without dialog, see PlaceChoices.forOtherGroup; "Cancel" leaves the group unchanged.
      *
      * @param run result of the lookup
+     * @param chosen filled with the files whose place the user chose (in a dialog or with "Use for all")
      * @return the place per file after the choices - cancelled files left out
      */
-    private Map<MediaFile, Place> choosePlaces(PlaceRun run) {
+    private Map<MediaFile, Place> choosePlaces(PlaceRun run, Set<MediaFile> chosen) {
         final Map<MediaFile, Place> places = new LinkedHashMap<>(run.places());
         final List<List<MediaFile>> groups = PlaceChoices.groups(run.choices());
         Place forAll = null;
@@ -583,6 +587,7 @@ public class GeoTagger implements Initializable {
             if (forAll != null) {
                 final Place place = PlaceChoices.forOtherGroup(forAll, candidates);
                 group.forEach(file -> places.put(file, place));
+                chosen.addAll(group);
                 continue;
             }
             final Optional<PlaceChoiceDialog.Choice> choice = PlaceChoiceDialog.show(stage, group, candidates,
@@ -591,6 +596,7 @@ public class GeoTagger implements Initializable {
                 group.forEach(places::remove);
             } else {
                 group.forEach(file -> places.put(file, choice.get().place()));
+                chosen.addAll(group);
                 if (choice.get().forAll()) {
                     forAll = choice.get().place();
                 }
@@ -615,10 +621,11 @@ public class GeoTagger implements Initializable {
         }, worker);
     }
 
-    // a found place sets the place fields - see PlaceValues for the country name and the sublocation
-    private void applyPlaces(PlaceRun run, String language) {
+    // a found place sets the place fields - see PlaceValues for the country name and the sublocation; a place the user
+    // chose sets the sublocation as chosen
+    private void applyPlaces(PlaceRun run, String language, Set<MediaFile> chosen) {
         final Map<MediaFile, Map<Field, Object>> values = new LinkedHashMap<>();
-        run.places().forEach((file, place) -> values.put(file, PlaceValues.of(place, language, file)));
+        run.places().forEach((file, place) -> values.put(file, PlaceValues.of(place, language, file, chosen.contains(file))));
         if (values.isEmpty()) {
             refreshFiles();
         } else {

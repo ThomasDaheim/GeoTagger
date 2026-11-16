@@ -54,12 +54,26 @@ public final class PlaceValues {
      * @return new value per field, null deletes it - a field missing in the map stays as it is
      */
     public static Map<Field, Object> of(Place place, String language, MediaFile file) {
+        return of(place, language, file, false);
+    }
+
+    /**
+     * Like {@link #of(Place, String, MediaFile)} - but a place the user chose in "Choose place" sets the sublocation
+     * as chosen: "Barcelona" without district deletes the old district.
+     *
+     * @param place place found by the service or chosen by the user
+     * @param language language of the names, e.g. "de" - empty for the default of the service
+     * @param file file to set the place for
+     * @param chosen true if the user chose (and maybe edited) the place
+     * @return new value per field, null deletes it - a field missing in the map stays as it is
+     */
+    public static Map<Field, Object> of(Place place, String language, MediaFile file, boolean chosen) {
         final Map<Field, Object> values = new EnumMap<>(Field.class);
         values.put(Field.COUNTRY_CODE, place.countryCode());
         values.put(Field.COUNTRY, countryName(place, language));
         values.put(Field.STATE, place.state());
         values.put(Field.CITY, place.city());
-        if (place.sublocation() != null || !Objects.equals(place.city(), file.value(Field.CITY))) {
+        if (chosen || place.sublocation() != null || !Objects.equals(place.city(), file.value(Field.CITY))) {
             values.put(Field.SUBLOCATION, place.sublocation());
         }
         return values;

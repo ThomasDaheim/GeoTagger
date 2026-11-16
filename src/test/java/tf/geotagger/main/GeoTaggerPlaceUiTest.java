@@ -203,6 +203,27 @@ class GeoTaggerPlaceUiTest {
     }
 
     @Test
+    void choosingNoDistrictRemovesTheOldOne(FxRobot robot) throws TimeoutException {
+        // b.jpg: Bozen / Altstadt - the user picks "Bozen" without district (final review of plan 5c)
+        final List<NearbyPlace> bozen = List.of(
+                new NearbyPlace(new Place("IT", "Italien", "Trentino-Südtirol", "Bozen", "Altstadt"), 0.3),
+                new NearbyPlace(new Place("IT", "Italien", "Trentino-Südtirol", "Bozen", "Gries"), 0.6),
+                new NearbyPlace(new Place("IT", "Italien", "Trentino-Südtirol", "Bozen", null), 0.9));
+        loadImages(robot);
+        robot.interact(() -> controller.setPlaceService(() -> new FakeGeocoder(Duration.ZERO, bozen)));
+        selectOnly(robot, "b.jpg");
+        findPlacesAndWaitForChoice(robot);
+
+        robot.interact(() -> robot.lookup("#placeChoiceList").queryListView().getSelectionModel().select(2));
+        robot.clickOn("#placeChoiceUse");
+        UiTestSupport.waitUntilIdle(controller);
+
+        final MediaFile b = fileNamed(robot, "b.jpg");
+        assertEquals("Bozen", b.value(Field.CITY));
+        assertNull(b.value(Field.SUBLOCATION));
+    }
+
+    @Test
     void cancelKeepsTheseFiles(FxRobot robot) throws TimeoutException {
         loadImages(robot);
         // a first, b second - two cells with different places nearby, two dialogs

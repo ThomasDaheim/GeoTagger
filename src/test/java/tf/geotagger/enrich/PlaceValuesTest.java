@@ -74,6 +74,15 @@ class PlaceValuesTest {
     }
 
     @Test
+    void chosenPlaceWithoutSublocationClearsIt() {
+        // chosen by the user in "Choose place" (e.g. "Barcelona" without district): the old district goes
+        final Place barcelona = new Place("ES", "Spanien", "Katalonien", "Barcelona", null);
+        final Map<Field, Object> values = PlaceValues.of(barcelona, "de", file("Barcelona", "Eixample"), true);
+        assertTrue(values.containsKey(Field.SUBLOCATION));
+        assertNull(values.get(Field.SUBLOCATION));
+    }
+
+    @Test
     void sublocationIsClearedForAnotherCity() {
         final Map<Field, Object> values = PlaceValues.of(KINGMAN, "de", file("Bozen", "Altstadt"));
         assertTrue(values.containsKey(Field.SUBLOCATION));

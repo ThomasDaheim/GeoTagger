@@ -84,6 +84,31 @@ class PlaceEnricherTest {
     }
 
     @Test
+    void cityWithoutDistrictIsAlwaysOffered() throws InterruptedException {
+        // Gràcia: two districts within 1 km, the centre of Barcelona 2 km away - "Barcelona" alone must be choosable
+        final NearbyPlace gracia = new NearbyPlace(new Place("ES", "Spanien", "Katalonien", "Barcelona", "Gràcia"), 0.2);
+        final NearbyPlace eixample = new NearbyPlace(new Place("ES", "Spanien", "Katalonien", "Barcelona", "Eixample"), 0.8);
+        final NearbyPlace city = new NearbyPlace(new Place("ES", "Spanien", "Katalonien", "Barcelona", null), 2.0);
+        final MediaFile a = file("a.jpg", 41.40, 2.157);
+
+        final PlaceRun run = enricher(new FakeGeocoder(INTERVAL, List.of(gracia, eixample, city))).run(List.of(a), (done, total) -> { });
+
+        assertEquals(Map.of(a, List.of(gracia, eixample, city)), run.choices());
+    }
+
+    @Test
+    void cityWithoutDistrictIsMadeUpWhenTheServiceHasNone() throws InterruptedException {
+        final NearbyPlace gracia = new NearbyPlace(new Place("ES", "Spanien", "Katalonien", "Barcelona", "Gràcia"), 0.2);
+        final NearbyPlace eixample = new NearbyPlace(new Place("ES", "Spanien", "Katalonien", "Barcelona", "Eixample"), 0.8);
+        final MediaFile a = file("a.jpg", 41.40, 2.157);
+
+        final PlaceRun run = enricher(new FakeGeocoder(INTERVAL, List.of(gracia, eixample))).run(List.of(a), (done, total) -> { });
+
+        assertEquals(List.of(gracia, eixample,
+                new NearbyPlace(new Place("ES", "Spanien", "Katalonien", "Barcelona", null), 0.2)), run.choices().get(a));
+    }
+
+    @Test
     void oneCandidateNeedsNoChoice() throws InterruptedException {
         final MediaFile a = file("a.jpg", 41.387, 2.17);
 
