@@ -78,6 +78,14 @@ class PlaceServiceFactoryTest {
     }
 
     @Test
+    void createsFromGivenValues() throws GeoServiceException {
+        // the "Check" of the preferences uses the values typed in, not yet saved
+        assertEquals("Mapbox", PlaceServiceFactory.create(PlaceService.MAPBOX, "", "tok", "en").name());
+        assertEquals(GeoServiceException.Kind.CONFIGURATION, assertThrows(GeoServiceException.class,
+                () -> PlaceServiceFactory.create(PlaceService.GEONAMES, " ", "tok", "en")).kind());
+    }
+
+    @Test
     void cacheKeyDependsOnServiceAndLanguage() {
         choose(PlaceService.GEONAMES, "demo", "tok", "de");
         final String geoNamesGerman = PlaceServiceFactory.cacheKey();

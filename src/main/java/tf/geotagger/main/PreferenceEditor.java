@@ -26,8 +26,13 @@
 package tf.geotagger.main;
 
 import java.io.File;
+import java.math.BigDecimal;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
+import java.util.Objects;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+import javafx.application.Platform;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
@@ -44,6 +49,9 @@ import javafx.util.StringConverter;
 import jfxtras.styles.jmetro.JMetro;
 import jfxtras.styles.jmetro.Style;
 import tf.exiftool.ExifToolException;
+import tf.geo.LatLon;
+import tf.geo.service.GeoServiceException;
+import tf.geo.service.ReverseGeocoder;
 import tf.geotagger.enrich.PlaceService;
 import tf.geotagger.metadata.ExifToolLocator;
 import tf.helper.javafx.AbstractStage;
@@ -54,6 +62,9 @@ import tf.helper.javafx.AbstractStage;
  */
 public class PreferenceEditor extends AbstractStage {
     private static final PreferenceEditor INSTANCE = new PreferenceEditor();
+    // "Check" of the place service: Munich
+    private static final LatLon CHECK_POSITION = new LatLon(48.137, 11.575);
+    private static final double DEFAULT_RADIUS_KM = 1.0;
 
     private final TextField exifToolPath = new TextField();
     private final Label exifToolCheck = new Label();
@@ -61,6 +72,9 @@ public class PreferenceEditor extends AbstractStage {
     private final TextField geoNamesUsername = new TextField();
     private final TextField mapboxAccessToken = new TextField();
     private final TextField placeLanguage = new TextField();
+    private final TextField placeChoiceRadius = new TextField();
+    private final Button placeCheckButton = new Button("Check");
+    private final Label placeCheck = new Label();
 
     private PreferenceEditor() {
         initViewer();
@@ -123,6 +137,16 @@ public class PreferenceEditor extends AbstractStage {
         final HBox language = new HBox(8, placeLanguage, new Label("e.g. de, en - empty: service default"));
         language.setAlignment(Pos.CENTER_LEFT);
         addRow(grid, 5, "Language of places:", language);
+        placeChoiceRadius.setPrefColumnCount(5);
+        final HBox radius = new HBox(8, placeChoiceRadius, new Label("km - several places nearby: choose (0: never ask)"));
+        radius.setAlignment(Pos.CENTER_LEFT);
+        addRow(grid, 6, "Ask between places within:", radius);
+        // one request with the values typed in - also before they are saved
+        placeCheckButton.setOnAction(event -> checkPlaceService());
+        grid.add(placeCheckButton, 0, 7);
+        GridPane.setMargin(placeCheckButton, INSET_TOP);
+        grid.add(placeCheck, 1, 7, 2, 1);
+        GridPane.setMargin(placeCheck, INSET_TOP);
 
         final Button saveButton = new Button("Save");
         saveButton.setOnAction(event -> {
@@ -131,6 +155,7 @@ public class PreferenceEditor extends AbstractStage {
             GeoTaggerPreferences.GEONAMES_USERNAME.put(geoNamesUsername.getText().trim());
             GeoTaggerPreferences.MAPBOX_ACCESS_TOKEN.put(mapboxAccessToken.getText().trim());
             GeoTaggerPreferences.PLACE_LANGUAGE.put(placeLanguage.getText().trim());
+            GeoTaggerPreferences.PLACE_CHOICE_RADIUS_KM.put(radiusKm(placeChoiceRadius.getText()));
             close();
         });
         setActionAccelerator(saveButton);
@@ -156,6 +181,9 @@ public class PreferenceEditor extends AbstractStage {
         geoNamesUsername.setText(GeoTaggerPreferences.GEONAMES_USERNAME.getAsString());
         mapboxAccessToken.setText(GeoTaggerPreferences.MAPBOX_ACCESS_TOKEN.getAsString());
         placeLanguage.setText(GeoTaggerPreferences.PLACE_LANGUAGE.getAsString());
+        final Double radiusKm = GeoTaggerPreferences.PLACE_CHOICE_RADIUS_KM.getAsType();
+        placeChoiceRadius.setText(BigDecimal.valueOf(radiusKm).stripTrailingZeros().toPlainString());
+        placeCheck.setText("");
         showAndWait();
         return wasActionButtonPressed();
     }
@@ -174,6 +202,49 @@ public class PreferenceEditor extends AbstractStage {
         if (selected != null) {
             exifToolPath.setText(selected.getAbsolutePath());
             check();
+        }
+    }
+
+    // a request in the background with the values typed in - the window stays usable, also offline (timeouts of the
+    // transport)
+    private void checkPlaceService() {
+        final ReverseGeocoder geocoder;
+        try {
+            geocoder = PlaceServiceFactory.create(placeService.getValue(), geoNamesUsername.getText(), mapboxAccessToken.getText(),
+                    placeLanguage.getText());
+        } catch (GeoServiceException ex) {
+            placeCheck.setText(ex.getMessage());
+            return;
+        }
+        placeCheckButton.setDisable(true);
+        placeCheck.setText("Asking " + geocoder.name() + " ...");
+        final Thread check = new Thread(() -> {
+            String result;
+            try {
+                result = geocoder.reverse(CHECK_POSITION)
+                        .map(place -> "OK - " + Stream.of(place.city(), place.state()).filter(Objects::nonNull)
+                                .collect(Collectors.joining(", ")))
+                        .orElse("OK");
+            } catch (GeoServiceException | RuntimeException ex) {
+                result = String.valueOf(ex.getMessage());
+            }
+            final String text = result;
+            Platform.runLater(() -> {
+                placeCheck.setText(text);
+                placeCheckButton.setDisable(false);
+            });
+        }, "GeoTagger-check");
+        check.setDaemon(true);
+        check.start();
+    }
+
+    // km from the text field - a comma counts as decimal point, invalid or negative input gives the default
+    private static double radiusKm(String text) {
+        try {
+            final double value = Double.parseDouble(text.trim().replace(',', '.'));
+            return value >= 0 && Double.isFinite(value) ? value : DEFAULT_RADIUS_KM;
+        } catch (NumberFormatException ex) {
+            return DEFAULT_RADIUS_KM;
         }
     }
 

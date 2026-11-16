@@ -44,12 +44,26 @@ final class PlaceServiceFactory {
      * @throws GeoServiceException of kind CONFIGURATION if the user name or token of the service is missing
      */
     static ReverseGeocoder create() throws GeoServiceException {
-        final String language = language();
-        return switch (service()) {
-            case MAPBOX -> new MapboxReverseGeocoder(credential(GeoTaggerPreferences.MAPBOX_ACCESS_TOKEN,
-                    "Please enter your Mapbox access token in the preferences"), language, new JdkHttpTransport());
-            case GEONAMES -> new GeoNamesReverseGeocoder(credential(GeoTaggerPreferences.GEONAMES_USERNAME,
-                    "Please enter your GeoNames user name in the preferences"), language, new JdkHttpTransport());
+        return create(service(), GeoTaggerPreferences.GEONAMES_USERNAME.getAsString(),
+                GeoTaggerPreferences.MAPBOX_ACCESS_TOKEN.getAsString(), language());
+    }
+
+    /**
+     * @param service the service
+     * @param geoNamesUser GeoNames user name - used for GeoNames
+     * @param mapboxToken Mapbox access token - used for Mapbox
+     * @param language language of the names, e.g. "de" - empty for the default of the service
+     * @return the service with these values, e.g. the ones typed into the preferences but not saved yet
+     * @throws GeoServiceException of kind CONFIGURATION if the user name or token of the service is missing
+     */
+    static ReverseGeocoder create(PlaceService service, String geoNamesUser, String mapboxToken, String language)
+            throws GeoServiceException {
+        final String trimmedLanguage = language == null ? "" : language.trim();
+        return switch (service) {
+            case MAPBOX -> new MapboxReverseGeocoder(credential(mapboxToken,
+                    "Please enter your Mapbox access token in the preferences"), trimmedLanguage, new JdkHttpTransport());
+            case GEONAMES -> new GeoNamesReverseGeocoder(credential(geoNamesUser,
+                    "Please enter your GeoNames user name in the preferences"), trimmedLanguage, new JdkHttpTransport());
         };
     }
 
@@ -78,8 +92,8 @@ final class PlaceServiceFactory {
         return GeoTaggerPreferences.PLACE_LANGUAGE.getAsString().trim();
     }
 
-    private static String credential(GeoTaggerPreferences preference, String missing) throws GeoServiceException {
-        final String value = preference.getAsString().trim();
+    private static String credential(String text, String missing) throws GeoServiceException {
+        final String value = text == null ? "" : text.trim();
         if (value.isEmpty()) {
             throw new GeoServiceException(GeoServiceException.Kind.CONFIGURATION, missing);
         }
