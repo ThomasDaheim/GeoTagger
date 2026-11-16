@@ -259,14 +259,14 @@ class GeoTaggerPlaceUiTest {
     }
 
     @Test
-    void nothingToLookUpChangesNothing(FxRobot robot) throws TimeoutException {
+    void findPlaceIsDisabledWithNothingToLookUp(FxRobot robot) throws TimeoutException {
+        // user feedback 16.11.2026: a file without coordinates selected - the button shouldn't be usable
         loadImages(robot);
         selectOnly(robot, "c.jpg");
+        assertTrue(robot.lookup("#findPlaceButton").queryButton().isDisabled());
 
-        findPlaces(robot);
-
+        selectOnly(robot, "a.jpg");
+        assertFalse(robot.lookup("#findPlaceButton").queryButton().isDisabled());
         assertTrue(geocoder.requests().isEmpty());
-        assertTrue(robot.lookup("#undoButton").queryButton().isDisabled());
-        assertTrue(status(robot).startsWith("No files to look up"), status(robot));
     }
 }

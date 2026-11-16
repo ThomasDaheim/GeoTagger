@@ -137,6 +137,21 @@ class GeoTaggerTrackUiTest {
     }
 
     @Test
+    void addedGpxFilesStayWhenAFolderIsOpened(FxRobot robot) throws IOException, TimeoutException {
+        // user feedback 16.11.2026: a GPX file added with "+ GPX" was closed by opening a folder
+        final Path extra = Files.writeString(Files.createDirectory(dir.resolve("elsewhere")).resolve("extra.gpx"), TOUR,
+                StandardCharsets.UTF_8);
+        final TrackListPane tracks = robot.lookup("#trackListPane").queryAs(TrackListPane.class);
+        robot.interact(() -> tracks.addTracks(List.of(extra)));
+
+        loadFolder(robot);
+
+        assertEquals(List.of("broken.gpx", "extra.gpx", "tour.gpx"), trackList(robot).getItems().stream()
+                .map(track -> track.file().getFileName().toString()).sorted().toList());
+        assertTrue(track(robot, "extra.gpx").shownProperty().get());
+    }
+
+    @Test
     void checkingATrackShowsItOnTheMap(FxRobot robot) throws IOException, TimeoutException {
         loadFolder(robot);
         final GpxTrack tour = track(robot, "tour.gpx");

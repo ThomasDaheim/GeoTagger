@@ -39,7 +39,7 @@ Videos durchlaufen denselben Ablauf.
   - Marker aller Dateien mit Koordinaten, gebündelt (Clustering).
   - Geladene Tracks werden angezeigt.
   - Koordinaten setzen per Drag & Drop aus der Liste, durch Verschieben eines Markers oder per Rechtsklick für die Auswahl.
-- Ortsinformationen per Reverse-Geocoding: GeoNames (`findNearbyPlaceName` über `secure.geonames.org`, mit Benutzername) oder Mapbox (Geocoding v6, mit Access-Token), wählbar in den Einstellungen. GeoNames liefert keine Sublocation.
+- Ortsinformationen per Reverse-Geocoding: GeoNames (`findNearbyPlaceName` über `secure.geonames.org`, mit Benutzername) oder Mapbox (Geocoding v6, mit Access-Token), wählbar in den Einstellungen. „Find place“ ist gesperrt, wenn es nichts abzufragen gibt.
 - Höhe per openrouteservice oder lokalen SRTM-Daten, wahlweise aus dem Track (Plan 5b).
 - Zeitzone: aus der Datei, dem Sync-Dialog oder dem Bearbeiten-Dialog, **nicht** aus den Koordinaten. Entscheidung vom 15.11.2026: Bei DSLR-Fotos stimmt die Zeitzone des Ortes nur, wenn die Kamerauhr auf Ortszeit stand.
 - Dialog „Bearbeiten“: editierbare Felder für die Auswahl. Bei Mehrfachauswahl wird „(different)“ angezeigt, und eine Eingabe gilt für alle ausgewählten Dateien. OK ist ein Undo-Schritt.
@@ -47,7 +47,8 @@ Videos durchlaufen denselben Ablauf.
 - Track-Liste:
   - GPX-Dateien im Ordner (und in Unterordnern) werden automatisch aufgelistet.
   - Jeder Track lässt sich einzeln laden und auf der Karte ein- und ausblenden.
-  - Weitere GPX-Dateien lassen sich hinzufügen.
+  - Weitere GPX-Dateien lassen sich hinzufügen. Sie bleiben in der Liste, wenn ein anderer Ordner geöffnet wird; nur die GPX-Dateien des alten Ordners werden ersetzt.
+- Das Häkchen „Unterordner“ lädt den geöffneten Ordner sofort neu (nach Rückfrage bei ungespeicherten Änderungen).
 - Änderungen werden gesammelt und erst beim Speichern geschrieben. Undo und Redo kommen aus JavaHelper.
 - Einstellungen: ExifTool-Pfad; für „Ort ermitteln“ Dienst (GeoNames oder Mapbox), GeoNames-Benutzer, Mapbox-Token und Sprache der Ortsnamen (z. B. `de`, leer = Vorgabe des Dienstes); später Schlüssel für die Höhe und die zuletzt verwendeten Sync-Parameter.
 
@@ -210,7 +211,8 @@ Nach dem Laden eines Ordners ist die Karte auf alle Dateien eingepasst. Die erst
    - Pro Rasterzelle gibt es eine Anfrage, deren Ergebnis für die Sitzung im Speicher bleibt, getrennt je Dienst und Sprache. Fehlgeschlagene Zellen werden nicht gespeichert.
    - Die Anfragen werden je Dienst gedrosselt: GeoNames 250 ms, Mapbox 100 ms Pause.
    - Vorübergehende Fehler werden nach 1, 2 und 4 s wiederholt. Ein erschöpftes Kontingent oder falsche Zugangsdaten brechen den Lauf ab; was bis dahin gefunden wurde, wird übernommen.
-   - Ein gefundener Ort setzt alle fünf Ortsfelder; Teile, die der Dienst nicht liefert, werden geleert.
+   - Ein gefundener Ort setzt alle fünf Ortsfelder; Teile, die der Dienst nicht liefert, werden geleert. Ausnahmen (Rückmeldung vom 16.11.2026): Der Ländername kommt aus dem Ländercode in der gewählten Sprache (z. B. „Vereinigte Staaten“), und ohne Sublocation vom Dienst bleibt die alte Sublocation, wenn der Ort gleich bleibt.
+   - GeoNames: Ort ist der nächste besiedelte Ort, der kein Stadtteil ist; ein Stadtteil (PPLX, z. B. Eixample in Barcelona) wird Sublocation, wenn er der nächste Ort überhaupt ist.
    - Die Ergebnisse landen in `pending`, als ein Undo-Schritt pro Lauf. Danach zeigt die Statusleiste eine Zusammenfassung, bei Fehlern zusätzlich ein Hinweis.
 4. **Speichern**
    - Je geänderter Datei werden die Ziel-Tags für ihr Format gebildet und über ExifTool geschrieben.

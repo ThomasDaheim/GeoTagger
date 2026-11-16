@@ -45,6 +45,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
@@ -103,6 +104,7 @@ import tf.geotagger.enrich.GridCell;
 import tf.geotagger.enrich.PlaceEnricher;
 import tf.geotagger.enrich.PlaceRun;
 import tf.geotagger.enrich.PlaceSummary;
+import tf.geotagger.enrich.PlaceValues;
 import tf.geotagger.files.FolderScanner;
 import tf.geotagger.metadata.ExifToolLocator;
 import tf.geotagger.metadata.MetadataReader;
@@ -407,6 +409,8 @@ public class GeoTagger implements Initializable {
                 return;
             }
             filteredFiles.setPredicate((MediaFilter) newToggle.getUserData());
+            // the listed files decide what "Find place" can do
+            updateButtons();
         });
         filterButtons.get(MediaFilter.ALL).setSelected(true);
         updateFilterCounts();
@@ -509,6 +513,7 @@ public class GeoTagger implements Initializable {
         }
         final Map<GridCell, Optional<Place>> cache = placeCaches.computeIfAbsent(PlaceServiceFactory.cacheKey(),
                 key -> new ConcurrentHashMap<>());
+        final String language = PlaceServiceFactory.language();
         final Task<PlaceRun> task = new Task<>() {
             @Override
             protected PlaceRun call() throws InterruptedException {
@@ -522,7 +527,7 @@ public class GeoTagger implements Initializable {
         task.setOnSucceeded(event -> {
             finishTask();
             final PlaceRun run = task.getValue();
-            applyPlaces(run);
+            applyPlaces(run, language);
             final String summary = PlaceSummary.text(run);
             statusLabel.setText(summary);
             if (PlaceSummary.hasProblems(run)) {
@@ -554,18 +559,10 @@ public class GeoTagger implements Initializable {
         return listed.stream().filter(MediaFile::hasCoordinates).filter(file -> !file.hasPlace()).toList();
     }
 
-    // a found place sets all place fields - what the service doesn't know is cleared, so that no old place is mixed in
-    private void applyPlaces(PlaceRun run) {
+    // a found place sets the place fields - see PlaceValues for the country name and the sublocation
+    private void applyPlaces(PlaceRun run, String language) {
         final Map<MediaFile, Map<Field, Object>> values = new LinkedHashMap<>();
-        run.places().forEach((file, place) -> {
-            final Map<Field, Object> fileValues = new EnumMap<>(Field.class);
-            fileValues.put(Field.COUNTRY_CODE, place.countryCode());
-            fileValues.put(Field.COUNTRY, place.country());
-            fileValues.put(Field.STATE, place.state());
-            fileValues.put(Field.CITY, place.city());
-            fileValues.put(Field.SUBLOCATION, place.sublocation());
-            values.put(file, fileValues);
-        });
+        run.places().forEach((file, place) -> values.put(file, PlaceValues.of(place, language, file)));
         if (values.isEmpty()) {
             refreshFiles();
         } else {
@@ -788,7 +785,9 @@ public class GeoTagger implements Initializable {
         // without a usable ExifTool nothing can be written - the changes stay pending
         saveButton.setDisable(busy || changed == 0 || writer == null);
         editButton.setDisable(busy || folder == null || selectedFiles().isEmpty());
-        findPlaceButton.setDisable(busy || folder == null);
+        // nothing to look up (e.g. a file without coordinates selected): no use (user feedback 16.11.2026)
+        findPlaceButton.setDisable(busy || folder == null
+                || placeScope(selectionByUser ? selectedFiles() : List.of(), mediaTable.getItems()).isEmpty());
         undoButton.setDisable(busy || folder == null || !DoUndoManager.getInstance().canUndo(undoKey()));
         redoButton.setDisable(busy || folder == null || !DoUndoManager.getInstance().canDo(undoKey()));
     }
@@ -867,6 +866,25 @@ public class GeoTagger implements Initializable {
                 loadAndRemember(selected.toPath());
             }
         });
+    }
+
+    // the open folder is read again with or without its subfolders (user feedback 16.11.2026)
+    @FXML
+    private void includeSubfoldersChanged() {
+        final Path openFolder = folder;
+        if (openFolder == null || busy) {
+            return;
+        }
+        final boolean include = includeSubfoldersCheck.isSelected();
+        // reloading drops unsaved changes - asked first; on "Cancel" the check box goes back
+        final AtomicBoolean reloaded = new AtomicBoolean(false);
+        confirmUnsavedChanges(() -> {
+            reloaded.set(true);
+            loadAndRemember(openFolder);
+        });
+        if (!reloaded.get() && !busy) {
+            includeSubfoldersCheck.setSelected(!include);
+        }
     }
 
     private void loadAndRemember(Path newFolder) {

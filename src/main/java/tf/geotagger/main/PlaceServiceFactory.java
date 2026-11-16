@@ -71,7 +71,10 @@ final class PlaceServiceFactory {
         }
     }
 
-    private static String language() {
+    /**
+     * @return language of the place names, e.g. "de" - empty for the default of the service
+     */
+    static String language() {
         return GeoTaggerPreferences.PLACE_LANGUAGE.getAsString().trim();
     }
 

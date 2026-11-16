@@ -29,7 +29,7 @@
     <top>
         <ToolBar>
             <SplitMenuButton fx:id="openFolderButton" text="Open folder..." onAction="#openFolder" disable="true"/>
-            <CheckBox fx:id="includeSubfoldersCheck" text="Include subfolders"/>
+            <CheckBox fx:id="includeSubfoldersCheck" text="Include subfolders" onAction="#includeSubfoldersChanged"/>
             <Separator orientation="VERTICAL"/>
             <Button fx:id="editButton" text="Edit..." onAction="#editSelection" disable="true">
                 <tooltip><Tooltip text="Edit the selected files (Ctrl+E, double click)" showDelay="300ms"/></tooltip>

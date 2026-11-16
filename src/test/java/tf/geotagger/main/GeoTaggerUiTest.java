@@ -145,6 +145,25 @@ class GeoTaggerUiTest {
     }
 
     @Test
+    void includeSubfoldersReloadsTheFolder(FxRobot robot) throws IOException, TimeoutException {
+        // user feedback 16.11.2026: switching the check box should update the open folder
+        TestFiles.image(dir, "a.jpg");
+        TestFiles.image(Files.createDirectory(dir.resolve("sub")), "b.jpg");
+        robot.interact(() -> controller.loadFolder(dir, false));
+        UiTestSupport.waitUntilIdle(controller);
+        final TableView<MediaFile> table = robot.lookup("#mediaTable").queryTableView();
+        assertEquals(1, table.getItems().size());
+
+        robot.clickOn("#includeSubfoldersCheck");
+        UiTestSupport.waitUntilIdle(controller);
+        assertEquals(2, table.getItems().size());
+
+        robot.clickOn("#includeSubfoldersCheck");
+        UiTestSupport.waitUntilIdle(controller);
+        assertEquals(1, table.getItems().size());
+    }
+
+    @Test
     void fontIs11Pixels(FxRobot robot) {
         assertEquals(11.0, robot.lookup("#statusLabel").queryAs(Label.class).getFont().getSize(), 0.01);
         assertEquals(11.0, robot.lookup("#mediaTable .column-header .label").queryAs(Label.class).getFont().getSize(), 0.01);

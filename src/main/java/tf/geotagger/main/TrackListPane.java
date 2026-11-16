@@ -28,10 +28,13 @@ package tf.geotagger.main;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Consumer;
@@ -71,6 +74,8 @@ public class TrackListPane extends VBox {
     private final ObservableList<GpxTrack> tracks = FXCollections.observableArrayList(track -> new Observable[] {track.stateProperty()});
     private final ListView<GpxTrack> trackList = new ListView<>(tracks);
     private final Map<GpxTrack, String> colors = new HashMap<>();
+    // added with "+ GPX" - they stay when another folder is opened
+    private final Set<Path> addedFiles = new HashSet<>();
     // GPX files are read in the background - one at a time
     private final ExecutorService loader = Executors.newSingleThreadExecutor(runnable -> {
         final Thread thread = new Thread(runnable, "GeoTagger-gpx");
@@ -137,19 +142,25 @@ public class TrackListPane extends VBox {
     }
 
     /**
-     * Replaces the list - e.g. with the GPX files of a newly opened folder. The old tracks leave the map.
+     * Replaces the GPX files of the old folder with those of a newly opened one - they leave the map. Files added with
+     * "+ GPX" stay (user feedback 16.11.2026).
      *
-     * @param gpxFiles GPX files to list, not loaded yet
+     * @param gpxFiles GPX files of the folder, not loaded yet
      */
     void setTracks(List<Path> gpxFiles) {
+        final List<GpxTrack> kept = tracks.stream()
+                .filter(track -> addedFiles.contains(track.file()) && !gpxFiles.contains(track.file()))
+                .toList();
         for (GpxTrack track : tracks) {
-            if (track.state() == GpxTrack.State.LOADED && map != null) {
+            if (!kept.contains(track) && track.state() == GpxTrack.State.LOADED && map != null) {
                 map.removeTrack(track);
             }
         }
-        colors.clear();
-        nextColor = 0;
-        tracks.setAll(gpxFiles.stream().map(this::newTrack).toList());
+        // the kept tracks keep their colour
+        colors.keySet().retainAll(kept);
+        final List<GpxTrack> newTracks = new ArrayList<>(kept);
+        gpxFiles.stream().map(this::newTrack).forEach(newTracks::add);
+        tracks.setAll(newTracks);
     }
 
     /**
@@ -159,6 +170,7 @@ public class TrackListPane extends VBox {
      */
     void addTracks(List<Path> gpxFiles) {
         for (Path file : gpxFiles) {
+            addedFiles.add(file);
             if (tracks.stream().noneMatch(track -> track.file().equals(file))) {
                 final GpxTrack track = newTrack(file);
                 tracks.add(track);
