@@ -36,6 +36,7 @@ import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import tf.geo.service.GeoServiceException;
+import tf.geo.service.NearbyPlace;
 import tf.geo.service.Place;
 import tf.geotagger.model.Field;
 import tf.geotagger.model.MediaFile;
@@ -50,8 +51,15 @@ class PlaceEnricherTest {
     private static final Place MERAN = new Place("IT", "Italien", "Trentino-Südtirol", "Meran", null);
     private static final Place BOZEN = new Place("IT", "Italien", "Trentino-Südtirol", "Bozen", null);
 
+    private static final List<NearbyPlace> BARCELONA = List.of(
+            new NearbyPlace(new Place("ES", "Spanien", "Katalonien", "Barcelona", "Eixample"), 0.65),
+            new NearbyPlace(new Place("ES", "Spanien", "Katalonien", "Barcelona", "el Raval"), 0.74),
+            new NearbyPlace(new Place("ES", "Spanien", "Katalonien", "Barcelona", null), 0.94),
+            new NearbyPlace(new Place("ES", "Spanien", "Katalonien", "L'Hospitalet de Llobregat", null), 3.1));
+
     private final List<Duration> sleeps = new ArrayList<>();
-    private final Map<GridCell, Optional<Place>> cache = new HashMap<>();
+    private final Map<GridCell, List<NearbyPlace>> cache = new HashMap<>();
+    private double radius = 1.0;
 
     private static MediaFile file(String name, Double latitude, Double longitude) {
         final Map<Field, Object> values = new EnumMap<>(Field.class);
@@ -61,7 +69,39 @@ class PlaceEnricherTest {
     }
 
     private PlaceEnricher enricher(FakeGeocoder geocoder) {
-        return new PlaceEnricher(geocoder, cache, sleeps::add);
+        return new PlaceEnricher(geocoder, cache, sleeps::add, radius);
+    }
+
+    @Test
+    void severalCandidatesNearbyNeedAChoice() throws InterruptedException {
+        final MediaFile a = file("a.jpg", 41.387, 2.17);
+
+        final PlaceRun run = enricher(new FakeGeocoder(INTERVAL, BARCELONA)).run(List.of(a), (done, total) -> { });
+
+        // the best answer stays the default
+        assertEquals(Map.of(a, BARCELONA.get(0).place()), run.places());
+        assertEquals(Map.of(a, BARCELONA.subList(0, 3)), run.choices());
+    }
+
+    @Test
+    void oneCandidateNeedsNoChoice() throws InterruptedException {
+        final MediaFile a = file("a.jpg", 41.387, 2.17);
+
+        final PlaceRun run = enricher(new FakeGeocoder(INTERVAL, BARCELONA.subList(2, 4))).run(List.of(a), (done, total) -> { });
+
+        assertEquals(Map.of(a, BARCELONA.get(2).place()), run.places());
+        assertTrue(run.choices().isEmpty());
+    }
+
+    @Test
+    void radiusZeroNeverAsks() throws InterruptedException {
+        radius = 0;
+        final MediaFile a = file("a.jpg", 41.387, 2.17);
+
+        final PlaceRun run = enricher(new FakeGeocoder(INTERVAL, BARCELONA)).run(List.of(a), (done, total) -> { });
+
+        assertEquals(Map.of(a, BARCELONA.get(0).place()), run.places());
+        assertTrue(run.choices().isEmpty());
     }
 
     private static GeoServiceException error(GeoServiceException.Kind kind) {

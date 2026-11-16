@@ -96,6 +96,7 @@ import tf.exiftool.ExifTool;
 import tf.exiftool.ExifToolException;
 import tf.geo.LatLon;
 import tf.geo.service.GeoServiceException;
+import tf.geo.service.NearbyPlace;
 import tf.geo.service.Place;
 import tf.geo.service.ReverseGeocoder;
 import tf.geotagger.edit.ChangeFieldsAction;
@@ -227,7 +228,7 @@ public class GeoTagger implements Initializable {
     // "Find place": the service from the preferences - UI tests set a fake
     private Callable<ReverseGeocoder> placeService = PlaceServiceFactory::create;
     // answers per service and language, for this session - filled in the worker thread
-    private final Map<String, Map<GridCell, Optional<Place>>> placeCaches = new ConcurrentHashMap<>();
+    private final Map<String, Map<GridCell, List<NearbyPlace>>> placeCaches = new ConcurrentHashMap<>();
     // counts loadFolder calls - results of an older one are dropped
     private int loadGeneration = 0;
     // DoUndoManager is a singleton - its listener is removed in stop(), otherwise it keeps this window alive
@@ -511,14 +512,15 @@ public class GeoTagger implements Initializable {
             ShowAlerts.getInstance().showAlert(Alert.AlertType.ERROR, GeoTaggerManager.TITLE, "Can't find places", ex.getMessage());
             return;
         }
-        final Map<GridCell, Optional<Place>> cache = placeCaches.computeIfAbsent(PlaceServiceFactory.cacheKey(),
+        final Map<GridCell, List<NearbyPlace>> cache = placeCaches.computeIfAbsent(PlaceServiceFactory.cacheKey(),
                 key -> new ConcurrentHashMap<>());
         final String language = PlaceServiceFactory.language();
         final Task<PlaceRun> task = new Task<>() {
             @Override
             protected PlaceRun call() throws InterruptedException {
                 updateMessage("Finding places with " + geocoder.name() + " ...");
-                return new PlaceEnricher(geocoder, cache, Thread::sleep).run(scope, (done, total) -> {
+                // the choice among several places nearby follows in plan 5c task 4 - until then never asked
+                return new PlaceEnricher(geocoder, cache, Thread::sleep, 0).run(scope, (done, total) -> {
                     updateProgress(done, total);
                     updateMessage("Finding places: " + done + " / " + total);
                 });

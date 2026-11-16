@@ -29,24 +29,42 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import tf.geo.service.NearbyPlace;
 import tf.geo.service.Place;
 import tf.geotagger.model.MediaFile;
 
 /**
  * Result of one "Find place" run.
  *
- * @param places the place found per file, in the order of the files
+ * @param places the place found per file (the best answer of the service), in the order of the files
  * @param notFound files where the service knows no place
  * @param failed files whose request failed (after the retries, quota used up, settings wrong)
  * @param problem the first error message - null without errors
+ * @param choices files with several places nearby, with these places (best answer first) - for the user to choose
  */
-public record PlaceRun(Map<MediaFile, Place> places, List<MediaFile> notFound, List<MediaFile> failed, String problem) {
+public record PlaceRun(Map<MediaFile, Place> places, List<MediaFile> notFound, List<MediaFile> failed, String problem,
+        Map<MediaFile, List<NearbyPlace>> choices) {
     /**
-     * Copies the collections - unmodifiable, the order of the places kept.
+     * Copies the collections - unmodifiable, the order of the files kept.
      */
     public PlaceRun {
         places = Collections.unmodifiableMap(new LinkedHashMap<>(places));
         notFound = List.copyOf(notFound);
         failed = List.copyOf(failed);
+        final Map<MediaFile, List<NearbyPlace>> choicesCopy = new LinkedHashMap<>();
+        choices.forEach((file, nearby) -> choicesCopy.put(file, List.copyOf(nearby)));
+        choices = Collections.unmodifiableMap(choicesCopy);
+    }
+
+    /**
+     * A run without anything to choose.
+     *
+     * @param places the place found per file, in the order of the files
+     * @param notFound files where the service knows no place
+     * @param failed files whose request failed
+     * @param problem the first error message - null without errors
+     */
+    public PlaceRun(Map<MediaFile, Place> places, List<MediaFile> notFound, List<MediaFile> failed, String problem) {
+        this(places, notFound, failed, problem, Map.of());
     }
 }

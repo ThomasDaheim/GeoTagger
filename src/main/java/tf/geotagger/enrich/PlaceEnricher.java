@@ -31,10 +31,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.function.BiConsumer;
 import tf.geo.LatLon;
 import tf.geo.service.GeoServiceException;
+import tf.geo.service.NearbyPlace;
 import tf.geo.service.Place;
 import tf.geo.service.ReverseGeocoder;
 import tf.geotagger.model.MediaFile;
@@ -48,18 +48,22 @@ public final class PlaceEnricher {
     private static final List<Duration> RETRY_WAITS = List.of(Duration.ofSeconds(1), Duration.ofSeconds(2), Duration.ofSeconds(4));
 
     private final ReverseGeocoder geocoder;
-    private final Map<GridCell, Optional<Place>> cache;
+    private final Map<GridCell, List<NearbyPlace>> cache;
     private final Sleeper sleeper;
+    private final double choiceRadiusKm;
 
     /**
      * @param geocoder service to ask
-     * @param cache answers of earlier runs with the same service and language - filled by this run
+     * @param cache answers of earlier runs with the same service and language (places nearby, empty = nothing found) -
+     * filled by this run
      * @param sleeper waits between requests
+     * @param choiceRadiusKm more than one place within this distance: the user chooses - 0 never asks
      */
-    public PlaceEnricher(ReverseGeocoder geocoder, Map<GridCell, Optional<Place>> cache, Sleeper sleeper) {
+    public PlaceEnricher(ReverseGeocoder geocoder, Map<GridCell, List<NearbyPlace>> cache, Sleeper sleeper, double choiceRadiusKm) {
         this.geocoder = Objects.requireNonNull(geocoder);
         this.cache = Objects.requireNonNull(cache);
         this.sleeper = Objects.requireNonNull(sleeper);
+        this.choiceRadiusKm = choiceRadiusKm;
     }
 
     /**
@@ -77,6 +81,7 @@ public final class PlaceEnricher {
         }
 
         final Map<MediaFile, Place> places = new LinkedHashMap<>();
+        final Map<MediaFile, List<NearbyPlace>> choices = new LinkedHashMap<>();
         final List<MediaFile> notFound = new ArrayList<>();
         final List<MediaFile> failed = new ArrayList<>();
         String problem = null;
@@ -89,16 +94,16 @@ public final class PlaceEnricher {
             if (stopped) {
                 failed.addAll(cellFiles);
             } else if (cache.containsKey(cell)) {
-                add(cache.get(cell), cellFiles, places, notFound);
+                add(cache.get(cell), cellFiles, places, choices, notFound);
             } else {
                 if (requested) {
                     sleeper.sleep(geocoder.minRequestInterval());
                 }
                 requested = true;
                 try {
-                    final Optional<Place> place = request(cell);
-                    cache.put(cell, place);
-                    add(place, cellFiles, places, notFound);
+                    final List<NearbyPlace> nearby = request(cell);
+                    cache.put(cell, nearby);
+                    add(nearby, cellFiles, places, choices, notFound);
                 } catch (GeoServiceException ex) {
                     failed.addAll(cellFiles);
                     if (problem == null) {
@@ -111,14 +116,14 @@ public final class PlaceEnricher {
             }
             progress.accept(++done, cells.size());
         }
-        return new PlaceRun(places, notFound, failed, problem);
+        return new PlaceRun(places, notFound, failed, problem, choices);
     }
 
     // with retries of temporary problems
-    private Optional<Place> request(GridCell cell) throws GeoServiceException, InterruptedException {
+    private List<NearbyPlace> request(GridCell cell) throws GeoServiceException, InterruptedException {
         for (int retry = 0; ; retry++) {
             try {
-                return geocoder.reverse(cell.center());
+                return geocoder.nearby(cell.center());
             } catch (GeoServiceException ex) {
                 if (ex.kind() != GeoServiceException.Kind.RETRYABLE || retry >= RETRY_WAITS.size()) {
                     throw ex;
@@ -128,11 +133,18 @@ public final class PlaceEnricher {
         }
     }
 
-    private static void add(Optional<Place> place, List<MediaFile> files, Map<MediaFile, Place> places, List<MediaFile> notFound) {
-        if (place.isPresent()) {
-            files.forEach(file -> places.put(file, place.get()));
-        } else {
+    // the best answer for all files of the cell - and the places to choose from, if more than one is near enough
+    private void add(List<NearbyPlace> nearby, List<MediaFile> files, Map<MediaFile, Place> places,
+            Map<MediaFile, List<NearbyPlace>> choices, List<MediaFile> notFound) {
+        if (nearby.isEmpty()) {
             notFound.addAll(files);
+            return;
+        }
+        files.forEach(file -> places.put(file, nearby.get(0).place()));
+        final List<NearbyPlace> close = choiceRadiusKm <= 0 ? List.of()
+                : nearby.stream().filter(place -> place.distanceKm() <= choiceRadiusKm).toList();
+        if (close.size() > 1) {
+            files.forEach(file -> choices.put(file, close));
         }
     }
 }

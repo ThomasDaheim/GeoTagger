@@ -33,6 +33,7 @@ import java.util.List;
 import java.util.Optional;
 import tf.geo.LatLon;
 import tf.geo.service.GeoServiceException;
+import tf.geo.service.NearbyPlace;
 import tf.geo.service.Place;
 import tf.geo.service.ReverseGeocoder;
 
@@ -48,7 +49,8 @@ public final class FakeGeocoder implements ReverseGeocoder {
 
     /**
      * @param interval pause it asks for between two requests
-     * @param answers in this order: a Place, Optional.empty() for "nothing found" or a GeoServiceException to throw
+     * @param answers in this order: a Place, a List of NearbyPlace (several places nearby), Optional.empty() for
+     * "nothing found" or a GeoServiceException to throw
      */
     public FakeGeocoder(Duration interval, Object... answers) {
         this.interval = interval;
@@ -63,7 +65,12 @@ public final class FakeGeocoder implements ReverseGeocoder {
     }
 
     @Override
-    public synchronized Optional<Place> reverse(LatLon position) throws GeoServiceException {
+    public Optional<Place> reverse(LatLon position) throws GeoServiceException {
+        return nearby(position).stream().findFirst().map(NearbyPlace::place);
+    }
+
+    @Override
+    public synchronized List<NearbyPlace> nearby(LatLon position) throws GeoServiceException {
         requests.add(position);
         if (!answers.isEmpty()) {
             last = answers.poll();
@@ -72,9 +79,12 @@ public final class FakeGeocoder implements ReverseGeocoder {
             throw ex;
         }
         if (last instanceof Place place) {
-            return Optional.of(place);
+            return List.of(new NearbyPlace(place, 0));
         }
-        return Optional.empty();
+        if (last instanceof List<?> list) {
+            return list.stream().map(NearbyPlace.class::cast).toList();
+        }
+        return List.of();
     }
 
     @Override
