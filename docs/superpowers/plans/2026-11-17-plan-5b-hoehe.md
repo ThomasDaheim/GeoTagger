@@ -37,7 +37,7 @@
   - **Download-Format** als Einstellung `SRTM_DOWNLOAD_FORMAT`, Standard `SRTM3`:
     - SRTM3 (90 m) als Block-Zip von `https://viewfinderpanoramas.org/dem3/<Block>.zip` mit Lückenfüllung, auch nördlich von 60°;
     - SRTM1 (30 m) je Kachel von `https://step.esa.int/auxdata/dem/SRTMGL1/<Kachel>.SRTMGL1.hgt.zip`, nur 60° N bis 56° S. Am 17.11.2026 geprüft: N46E011 = 16 MB gezippt.
-  - **Interpolation** als Einstellung `SRTM_INTERPOLATION` wie in GPXEditor: `NEAREST` oder `BILINEAR`, Standard `BILINEAR`. GPXEditors zweite Option „AVERAGE_NEIGHBOURS“ gewichtet 4 Punkte nach Abstand; bilinear ist die genaue Form davon.
+  - **Interpolation** als Einstellung `SRTM_INTERPOLATION` wie in GPXEditor: `NEAREST` oder `BILINEAR`, Standard `BILINEAR` (vom Nutzer am 17.11.2026 bestätigt). GPXEditors zweite Option „AVERAGE_NEIGHBOURS“ gewichtet 4 Punkte nach Abstand; bilinear ist die genaue Form davon.
 - **Auswahl wie bei „Find place“:** Mit eigener Auswahl werden die ausgewählten Dateien mit Koordinaten überschrieben, ohne Auswahl die gelisteten mit Koordinaten und ohne Höhe abgefragt. Die automatische Auswahl nach dem Laden zählt nicht. Der Knopf ist gesperrt, wenn es nichts abzufragen gibt.
 - **Höhe** wird auf 0,1 m gerundet gespeichert.
 - **ORS-Grenzen** (kostenloser Schlüssel): 40 Anfragen pro Minute. Deshalb 1,5 s Pause zwischen Anfragen, Blöcke bis 1000 Punkte, gleiche Positionen nur einmal.
