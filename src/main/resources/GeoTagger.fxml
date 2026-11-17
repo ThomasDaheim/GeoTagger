@@ -37,6 +37,9 @@
             <Button fx:id="findPlaceButton" text="Find place" onAction="#findPlaces" disable="true">
                 <tooltip><Tooltip text="Country, state, city and sublocation from the coordinates - for the selected files, or for all listed files without place" showDelay="300ms"/></tooltip>
             </Button>
+            <Button fx:id="findAltitudeButton" text="Find altitude" onAction="#findAltitudes" disable="true">
+                <tooltip><Tooltip text="Altitude from the coordinates (SRTM files, openrouteservice) - for the selected files, or for all listed files without altitude" showDelay="300ms"/></tooltip>
+            </Button>
             <Button fx:id="saveButton" text="Save" onAction="#save" disable="true"/>
             <!-- icons from GPXEditor -->
             <Button fx:id="undoButton" onAction="#undo" disable="true">

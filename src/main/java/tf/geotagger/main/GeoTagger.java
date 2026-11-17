@@ -99,11 +99,18 @@ import tf.exiftool.ExifTool;
 import tf.exiftool.ExifToolException;
 import tf.geo.LatLon;
 import tf.geo.service.GeoServiceException;
+import tf.geo.service.JdkFileDownload;
 import tf.geo.service.NearbyPlace;
 import tf.geo.service.Place;
 import tf.geo.service.ReverseGeocoder;
+import tf.geo.service.SrtmDownloader;
+import tf.geo.service.SrtmFormat;
 import tf.geotagger.edit.ChangeFieldsAction;
 import tf.geotagger.edit.FieldText;
+import tf.geotagger.enrich.AltitudeEnricher;
+import tf.geotagger.enrich.AltitudeRun;
+import tf.geotagger.enrich.AltitudeSource;
+import tf.geotagger.enrich.AltitudeSummary;
 import tf.geotagger.enrich.GridCell;
 import tf.geotagger.enrich.PlaceChoices;
 import tf.geotagger.enrich.PlaceEnricher;
@@ -152,6 +159,8 @@ public class GeoTagger implements Initializable {
     private Button editButton;
     @FXML
     private Button findPlaceButton;
+    @FXML
+    private Button findAltitudeButton;
     @FXML
     private Button undoButton;
     @FXML
@@ -234,6 +243,11 @@ public class GeoTagger implements Initializable {
     private Callable<ReverseGeocoder> placeService = PlaceServiceFactory::create;
     // answers per service and language, for this session - filled in the worker thread
     private final Map<String, Map<GridCell, List<NearbyPlace>>> placeCaches = new ConcurrentHashMap<>();
+    // "Find altitude": the sources from the preferences, the question before a download and the download itself - UI
+    // tests set fakes
+    private Callable<AltitudeEnricher> altitudeService = () -> AltitudeServiceFactory.enricher(Thread::sleep);
+    private Predicate<List<String>> confirmDownload = this::confirmDownload;
+    private SrtmDownloader srtmDownloader = new SrtmDownloader(new JdkFileDownload());
     // counts loadFolder calls - results of an older one are dropped
     private int loadGeneration = 0;
     // DoUndoManager is a singleton - its listener is removed in stop(), otherwise it keeps this window alive
@@ -634,6 +648,151 @@ public class GeoTagger implements Initializable {
     }
 
     /**
+     * "Find altitude": the altitude from the coordinates - for the files the user selected (overwriting their
+     * altitude), or for all listed files without altitude. Missing SRTM tiles are downloaded if the user agrees. One
+     * undo step for the whole run.
+     */
+    @FXML
+    private void findAltitudes() {
+        if (busy || folder == null) {
+            return;
+        }
+        final List<MediaFile> scope = altitudeScope(selectionByUser ? selectedFiles() : List.of(), mediaTable.getItems());
+        if (scope.isEmpty()) {
+            statusLabel.setText("No files to look up - they need coordinates (and no altitude, if nothing is selected)");
+            return;
+        }
+        final AltitudeSource source = GeoTaggerPreferences.ALTITUDE_SOURCE.getAsType();
+        List<String> missing = List.of();
+        if (source.usesSrtm()) {
+            try {
+                missing = AltitudeServiceFactory.srtm().missingTiles(scope.stream()
+                        .map(file -> new LatLon(file.latitude(), file.longitude())).toList());
+            } catch (GeoServiceException ex) {
+                // e.g. no SRTM folder in the preferences
+                ShowAlerts.getInstance().showAlert(Alert.AlertType.ERROR, GeoTaggerManager.TITLE, "Can't find altitudes", ex.getMessage());
+                return;
+            }
+        }
+        if (missing.isEmpty() || !confirmDownload.test(missing)) {
+            lookUpAltitudes(scope);
+        } else {
+            downloadTiles(missing, scope);
+        }
+    }
+
+    // in the background with progress - afterwards the lookup runs, also if the download failed (with the tiles there)
+    private void downloadTiles(List<String> tiles, List<MediaFile> scope) {
+        final SrtmFormat format = GeoTaggerPreferences.SRTM_DOWNLOAD_FORMAT.getAsType();
+        final Path srtmFolder = Path.of(GeoTaggerPreferences.SRTM_FOLDER.getAsString().trim());
+        final SrtmDownloader downloader = srtmDownloader;
+        final Task<List<String>> task = new Task<>() {
+            @Override
+            protected List<String> call() throws IOException {
+                updateMessage("Downloading SRTM tiles ...");
+                return downloader.download(tiles, format, srtmFolder, (done, total) -> {
+                    updateProgress(done, total);
+                    updateMessage("Downloading SRTM tiles: " + done + " / " + total);
+                });
+            }
+        };
+        // stays busy until the lookup is done - nothing may slip in between
+        task.setOnSucceeded(event -> {
+            unbindTask();
+            lookUpAltitudes(scope);
+        });
+        task.setOnFailed(event -> {
+            unbindTask();
+            ShowAlerts.getInstance().showAlert(Alert.AlertType.WARNING, GeoTaggerManager.TITLE, "Download of SRTM tiles failed",
+                    String.valueOf(task.getException().getMessage()));
+            lookUpAltitudes(scope);
+        });
+        runTask(task);
+    }
+
+    private void lookUpAltitudes(List<MediaFile> scope) {
+        final AltitudeEnricher enricher;
+        try {
+            enricher = altitudeService.call();
+        } catch (Exception ex) {
+            // e.g. no openrouteservice key in the preferences - busy after a download
+            finishTask();
+            ShowAlerts.getInstance().showAlert(Alert.AlertType.ERROR, GeoTaggerManager.TITLE, "Can't find altitudes", ex.getMessage());
+            return;
+        }
+        final Task<AltitudeRun> task = new Task<>() {
+            @Override
+            protected AltitudeRun call() throws InterruptedException {
+                updateMessage("Finding altitudes ...");
+                return enricher.run(scope, (done, total) -> {
+                    updateProgress(done, total);
+                    updateMessage("Finding altitudes: " + done + " / " + total);
+                });
+            }
+        };
+        task.setOnSucceeded(event -> {
+            finishTask();
+            final AltitudeRun run = task.getValue();
+            final Map<MediaFile, Map<Field, Object>> values = new LinkedHashMap<>();
+            run.altitudes().forEach((file, altitude) -> values.put(file, Map.of(Field.ALTITUDE, altitude)));
+            if (values.isEmpty()) {
+                refreshFiles();
+            } else {
+                perform(new ChangeFieldsAction("Find altitude", values));
+            }
+            final String summary = AltitudeSummary.text(run);
+            statusLabel.setText(summary);
+            if (AltitudeSummary.hasProblems(run)) {
+                ShowAlerts.getInstance().showAlert(Alert.AlertType.WARNING, GeoTaggerManager.TITLE, "Not all altitudes were found",
+                        summary + "\n" + Objects.requireNonNullElse(run.problem(), ""));
+            }
+        });
+        task.setOnFailed(event -> {
+            finishTask();
+            refreshFiles();
+            statusLabel.setText("Finding altitudes failed");
+            ShowAlerts.getInstance().showAlert(Alert.AlertType.ERROR, GeoTaggerManager.TITLE, "Finding altitudes failed",
+                    String.valueOf(task.getException().getMessage()));
+        });
+        runTask(task);
+    }
+
+    // asks before a download - the user may prefer openrouteservice or no altitude
+    private boolean confirmDownload(List<String> tiles) {
+        final SrtmFormat format = GeoTaggerPreferences.SRTM_DOWNLOAD_FORMAT.getAsType();
+        final String question = AltitudeQuestions.download(tiles, srtmDownloader.sources(tiles, format).size(), format);
+        final Optional<ButtonType> answer = ShowAlerts.getInstance().showAlert(Alert.AlertType.CONFIRMATION, GeoTaggerManager.TITLE,
+                "SRTM tiles missing", question, ButtonType.YES, ButtonType.NO);
+        return answer.isPresent() && answer.get() == ButtonType.YES;
+    }
+
+    /**
+     * Files "Find altitude" asks for - like placeScope.
+     *
+     * @param selected the selected files
+     * @param listed the files of the list (filtered)
+     * @return with a selection its files with coordinates, otherwise the listed files with coordinates and without
+     * altitude
+     */
+    static List<MediaFile> altitudeScope(List<MediaFile> selected, List<MediaFile> listed) {
+        if (!selected.isEmpty()) {
+            return selected.stream().filter(MediaFile::hasCoordinates).toList();
+        }
+        return listed.stream().filter(MediaFile::hasCoordinates).filter(file -> file.altitude() == null).toList();
+    }
+
+    /**
+     * @param service supplies the enricher for "Find altitude" - default from the preferences
+     * @param confirm asked with the missing SRTM tiles - true downloads them
+     * @param downloader downloads the SRTM tiles
+     */
+    void setAltitudeServices(Callable<AltitudeEnricher> service, Predicate<List<String>> confirm, SrtmDownloader downloader) {
+        altitudeService = Objects.requireNonNull(service);
+        confirmDownload = Objects.requireNonNull(confirm);
+        srtmDownloader = Objects.requireNonNull(downloader);
+    }
+
+    /**
      * @param service supplies the reverse geocoder for "Find place" - for UI tests, default from the preferences
      */
     void setPlaceService(Callable<ReverseGeocoder> service) {
@@ -851,6 +1010,8 @@ public class GeoTagger implements Initializable {
         // nothing to look up (e.g. a file without coordinates selected): no use (user feedback 16.11.2026)
         findPlaceButton.setDisable(busy || folder == null
                 || placeScope(selectionByUser ? selectedFiles() : List.of(), mediaTable.getItems()).isEmpty());
+        findAltitudeButton.setDisable(busy || folder == null
+                || altitudeScope(selectionByUser ? selectedFiles() : List.of(), mediaTable.getItems()).isEmpty());
         undoButton.setDisable(busy || folder == null || !DoUndoManager.getInstance().canUndo(undoKey()));
         redoButton.setDisable(busy || folder == null || !DoUndoManager.getInstance().canDo(undoKey()));
     }
@@ -1146,10 +1307,15 @@ public class GeoTagger implements Initializable {
     }
 
     private void finishTask() {
+        unbindTask();
+        setBusy(false);
+    }
+
+    // status and progress free again - the window stays busy, e.g. for a task that follows right away
+    private void unbindTask() {
         statusLabel.textProperty().unbind();
         progressBar.progressProperty().unbind();
         progressBar.setVisible(false);
-        setBusy(false);
     }
 
     private void setBusy(boolean busy) {
