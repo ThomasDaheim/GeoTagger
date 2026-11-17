@@ -40,7 +40,7 @@ Videos durchlaufen denselben Ablauf.
   - Geladene Tracks werden angezeigt.
   - Koordinaten setzen per Drag & Drop aus der Liste, durch Verschieben eines Markers oder per Rechtsklick für die Auswahl.
 - Ortsinformationen per Reverse-Geocoding: GeoNames (`findNearbyPlaceName` über `secure.geonames.org`, mit Benutzername) oder Mapbox (Geocoding v6, mit Access-Token), wählbar in den Einstellungen. „Find place“ ist gesperrt, wenn es nichts abzufragen gibt.
-- Höhe per openrouteservice oder lokalen SRTM-Daten, wahlweise aus dem Track (Plan 5b).
+- Höhe per „Find altitude“ aus lokalen SRTM-Daten und/oder openrouteservice (Plan 5b), wählbar in den Einstellungen; fehlende SRTM-Kacheln werden nach Rückfrage geladen. „Find altitude“ ist gesperrt, wenn es nichts abzufragen gibt. Die Höhe aus dem Track übernimmt der Sync-Dialog (Plan 6).
 - Zeitzone: aus der Datei, dem Sync-Dialog oder dem Bearbeiten-Dialog, **nicht** aus den Koordinaten. Entscheidung vom 15.11.2026: Bei DSLR-Fotos stimmt die Zeitzone des Ortes nur, wenn die Kamerauhr auf Ortszeit stand.
 - Dialog „Bearbeiten“: editierbare Felder für die Auswahl. Bei Mehrfachauswahl wird „(different)“ angezeigt, und eine Eingabe gilt für alle ausgewählten Dateien. OK ist ein Undo-Schritt.
 - Reiter „Bild-Info (ExifTool)“: alle rohen Tags der ausgewählten Datei, nur lesbar.
@@ -50,7 +50,7 @@ Videos durchlaufen denselben Ablauf.
   - Weitere GPX-Dateien lassen sich hinzufügen. Sie bleiben in der Liste, wenn ein anderer Ordner geöffnet wird; nur die GPX-Dateien des alten Ordners werden ersetzt.
 - Das Häkchen „Unterordner“ lädt den geöffneten Ordner sofort neu (nach Rückfrage bei ungespeicherten Änderungen).
 - Änderungen werden gesammelt und erst beim Speichern geschrieben. Undo und Redo kommen aus JavaHelper.
-- Einstellungen: ExifTool-Pfad; für „Ort ermitteln“ Dienst (GeoNames oder Mapbox), GeoNames-Benutzer, Mapbox-Token und Sprache der Ortsnamen (z. B. `de`, leer = Vorgabe des Dienstes), Umkreis für die Ortsauswahl und ein Knopf „Check“, der den gewählten Dienst mit den eingetragenen Werten abfragt; später Schlüssel für die Höhe und die zuletzt verwendeten Sync-Parameter.
+- Einstellungen: ExifTool-Pfad; für „Ort ermitteln“ Dienst (GeoNames oder Mapbox), GeoNames-Benutzer, Mapbox-Token und Sprache der Ortsnamen (z. B. `de`, leer = Vorgabe des Dienstes), Umkreis für die Ortsauswahl und ein Knopf „Check“, der den gewählten Dienst mit den eingetragenen Werten abfragt; für „Höhe ermitteln“ die Quelle (SRTM, Lücken per openrouteservice – Standard / nur SRTM / nur openrouteservice), der SRTM-Ordner, das Download-Format (SRTM3 – Standard / SRTM1), die Interpolation (bilinear – Standard / nächster Gitterpunkt) und der openrouteservice-Schlüssel mit „Check“ (Höhe von München); später die zuletzt verwendeten Sync-Parameter.
 
 ### Bewusst nicht in Version 1
 
@@ -143,7 +143,7 @@ Die Abhängigkeiten zeigen nur in eine Richtung: `ui` → `enrich` / `sync` / `m
 
 Das Layout ist an GeoSetter angelehnt:
 
-- **Werkzeugleiste:** Ordnerpfad, Häkchen „Unterordner“, „Edit…“, „Find place“ (Ort ermitteln), Track-Sync, Höhe ermitteln, Undo, Redo und „Speichern (n)“ mit der Anzahl ungespeicherter Dateien. Eigene Icon-Leisten je Bereich kommen später.
+- **Werkzeugleiste:** Ordnerpfad, Häkchen „Unterordner“, „Edit…“, „Find place“ (Ort ermitteln), „Find altitude“ (Höhe ermitteln), Track-Sync, Undo, Redo und „Speichern (n)“ mit der Anzahl ungespeicherter Dateien. Eigene Icon-Leisten je Bereich kommen später.
 - **Links oben:**
   - Statusfilter als Chips mit Anzahl.
   - Darunter die Dateiliste. Spalten: Name, Aufnahmezeit, Koordinaten (Grad/Min/Sek, z. B. `N46°40'48.05"; E11°5'28.61"`), Höhe, Ländercode, Land, Region, Ort, Sublocation, Zeitzone.
@@ -218,6 +218,12 @@ Nach dem Laden eines Ordners ist die Karte auf alle Dateien eingepasst. Die erst
      - „Use for all“ (nur wenn weitere Gruppen folgen) beantwortet den Rest des Laufs ohne weitere Fenster. Eine andere Gruppe bekommt die Auswahl aber nur, wenn der gewählte Ort auch unter ihren Kandidaten ist, sonst ihre beste Antwort.
      - Angeboten werden nur Orte und Stadtteile, keine Firmen oder Gebäude (anders als GeoSetter). Mapbox liefert nur einen Treffer, dort wird nie gefragt.
      - Alles bleibt ein Undo-Schritt.
+   - **Höhe (Plan 5b):** ohne Raster – jede Position einmal, denn die Höhe ändert sich schon auf wenigen Metern. Umfang wie bei „Find place“: die ausgewählten Dateien (überschrieben) oder alle gelisteten ohne Höhe.
+     - Quelle aus den Einstellungen: zuerst die SRTM-Kacheln (`.hgt`, SRTM1 oder SRTM3) aus dem SRTM-Ordner in einem Aufruf, die Lücken per openrouteservice; oder nur eine der beiden.
+     - Fehlende Kacheln: Rückfrage mit Kachelnamen und Größe nach oben („up to … MB“); bei „Ja“ lädt ein Hintergrund-Task sie mit Fortschritt. SRTM1 je Kachel von ESA (`step.esa.int`, 60° N – 56° S), SRTM3 in Blöcken von viewfinderpanoramas.org (Blocknamen wie in GPXEditor). Ein Download-Fehler wird gemeldet, dann geht es mit den vorhandenen Kacheln weiter; bei „Nein“ ebenso.
+     - Interpolation: bilinear aus den vier Nachbarpunkten (Standard) oder nächster Gitterpunkt; Lücken in der Kachel (-32768) zählen nicht.
+     - openrouteservice: höchstens 1000 Punkte je Anfrage, 1,5 s Pause zwischen den Anfragen (40 je Minute mit dem freien Schlüssel), Wiederholung nach 1, 2 und 4 s. Ein erschöpftes Kontingent, ein abgelehnter Schlüssel oder ein bleibender Fehler bricht den openrouteservice-Teil ab; die SRTM-Höhen bleiben. Ohne Schlüssel kommt die Meldung nur, wenn es Lücken gibt.
+     - Die Höhe wird auf 0,1 m gerundet.
    - Die Ergebnisse landen in `pending`, als ein Undo-Schritt pro Lauf. Danach zeigt die Statusleiste eine Zusammenfassung, bei Fehlern zusätzlich ein Hinweis.
 4. **Speichern**
    - Je geänderter Datei werden die Ziel-Tags für ihr Format gebildet und über ExifTool geschrieben.
@@ -233,6 +239,8 @@ Nach dem Laden eines Ordners ist die Karte auf alle Dateien eingepasst. Die erst
 | Schreibfehler bei einer Datei | Der Speicherlauf läuft weiter. Die Datei behält `pending` und wird markiert. Am Ende gibt es eine Zusammenfassung. |
 | Datei wurde seit dem Laden von außen geändert (Änderungszeit) | Es erscheint eine Warnung, die Datei wird übersprungen und behält `pending`. |
 | Dienstfehler oder Ratenlimit | Erneuter Versuch mit wachsender Wartezeit. Danach bleibt die Datei „ohne Ort“ bzw. „ohne Höhe“, und am Ende gibt es eine Zusammenfassung. |
+| SRTM-Ordner fehlt bzw. openrouteservice-Schlüssel fehlt (nur openrouteservice) | „Find altitude“ meldet, was in den Einstellungen fehlt, und fragt nichts ab. |
+| Download von SRTM-Kacheln schlägt fehl | Meldung, dann weiter mit den vorhandenen Kacheln und openrouteservice. Halb geladene Dateien bleiben nicht liegen. |
 | Ungespeicherte Änderungen beim Schließen oder Ordnerwechsel | Rückfrage: Speichern, Verwerfen oder Abbrechen |
 | GPX-Datei unlesbar | Der Track wird in der Liste als fehlerhaft markiert, die übrigen Tracks bleiben nutzbar. |
 

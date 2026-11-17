@@ -33,9 +33,13 @@ Work in progress. Available so far:
   * several districts or places nearby (GeoNames): a window to choose like GeoSetter's, with distances and editable fields - "Use for all" for the rest of the run
   * one request per ~100 m cell, cached for the session; one undo step per run
   * "Check" in the preferences tries the service with the values typed in
+* "Find altitude": altitude from the coordinates - from local SRTM files (.hgt), the gaps from [openrouteservice](https://openrouteservice.org) (API key), or only one of the two - set in the preferences
+  * for the selected files (their altitude is overwritten), or without selection for all listed files without altitude
+  * missing SRTM tiles are downloaded after a question - SRTM3 from viewfinderpanoramas.org (default) or SRTM1 from ESA
+  * bilinear interpolation (default) or the nearest grid point; one undo step per run
 * GPX reading and track sync logic (the sync dialog follows)
 
-Planned next: altitude (SRTM, openrouteservice) and the track sync dialog. The time zone isn't derived from the coordinates - it comes from the file, the track sync or the edit dialog.
+Planned next: the track sync dialog. The time zone isn't derived from the coordinates - it comes from the file, the track sync or the edit dialog.
 
 ## Notes
 
