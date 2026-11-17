@@ -220,9 +220,9 @@ Nach dem Laden eines Ordners ist die Karte auf alle Dateien eingepasst. Die erst
      - Alles bleibt ein Undo-Schritt.
    - **Höhe (Plan 5b):** ohne Raster – jede Position einmal, denn die Höhe ändert sich schon auf wenigen Metern. Umfang wie bei „Find place“: die ausgewählten Dateien (überschrieben) oder alle gelisteten ohne Höhe.
      - Quelle aus den Einstellungen: zuerst die SRTM-Kacheln (`.hgt`, SRTM1 oder SRTM3) aus dem SRTM-Ordner in einem Aufruf, die Lücken per openrouteservice; oder nur eine der beiden.
-     - Fehlende Kacheln: Rückfrage mit Kachelnamen und Größe nach oben („up to … MB“); bei „Ja“ lädt ein Hintergrund-Task sie mit Fortschritt. SRTM1 je Kachel von ESA (`step.esa.int`, 60° N – 56° S), SRTM3 in Blöcken von viewfinderpanoramas.org (Blocknamen wie in GPXEditor). Ein Download-Fehler wird gemeldet, dann geht es mit den vorhandenen Kacheln weiter; bei „Nein“ ebenso.
+     - Fehlende Kacheln: Rückfrage mit Kachelnamen und Größe nach oben („up to … MB“); bei „Ja“ lädt ein Hintergrund-Task sie mit Fortschritt. SRTM1 je Kachel von ESA (`step.esa.int`, 60° N – 56° S), SRTM3 in Blöcken von viewfinderpanoramas.org (Blocknamen wie in GPXEditor). Ein Download-Fehler stoppt die übrigen Downloads nicht und wird mit dem Ergebnis gemeldet; es geht mit den vorhandenen Kacheln weiter, bei „Nein“ ebenso. Ob eine Kachel da ist, entscheidet die Dateigröße (SRTM1 oder SRTM3), ohne die Datei zu lesen.
      - Interpolation: bilinear aus den vier Nachbarpunkten (Standard) oder nächster Gitterpunkt; Lücken in der Kachel (-32768) zählen nicht.
-     - openrouteservice: höchstens 1000 Punkte je Anfrage, 1,5 s Pause zwischen den Anfragen (40 je Minute mit dem freien Schlüssel), Wiederholung nach 1, 2 und 4 s. Ein erschöpftes Kontingent, ein abgelehnter Schlüssel oder ein bleibender Fehler bricht den openrouteservice-Teil ab; die SRTM-Höhen bleiben. Ohne Schlüssel kommt die Meldung nur, wenn es Lücken gibt.
+     - openrouteservice: höchstens 1000 Punkte je Anfrage, 1,5 s Pause zwischen den Anfragen (40 je Minute mit dem freien Schlüssel), Wiederholung nach 1, 2 und 4 s. Ein erschöpftes Kontingent, ein abgelehnter Schlüssel oder ein bleibender Fehler bricht den openrouteservice-Teil ab; die SRTM-Höhen bleiben. Ohne Schlüssel kommt die Meldung nur, wenn es Lücken gibt. Passt eine Antwort nicht zu den gefragten Punkten (Anzahl oder Position), gilt der Block als fehlgeschlagen.
      - Die Höhe wird auf 0,1 m gerundet.
    - Die Ergebnisse landen in `pending`, als ein Undo-Schritt pro Lauf. Danach zeigt die Statusleiste eine Zusammenfassung, bei Fehlern zusätzlich ein Hinweis.
 4. **Speichern**
@@ -240,7 +240,7 @@ Nach dem Laden eines Ordners ist die Karte auf alle Dateien eingepasst. Die erst
 | Datei wurde seit dem Laden von außen geändert (Änderungszeit) | Es erscheint eine Warnung, die Datei wird übersprungen und behält `pending`. |
 | Dienstfehler oder Ratenlimit | Erneuter Versuch mit wachsender Wartezeit. Danach bleibt die Datei „ohne Ort“ bzw. „ohne Höhe“, und am Ende gibt es eine Zusammenfassung. |
 | SRTM-Ordner fehlt bzw. openrouteservice-Schlüssel fehlt (nur openrouteservice) | „Find altitude“ meldet, was in den Einstellungen fehlt, und fragt nichts ab. |
-| Download von SRTM-Kacheln schlägt fehl | Meldung, dann weiter mit den vorhandenen Kacheln und openrouteservice. Halb geladene Dateien bleiben nicht liegen. |
+| Download von SRTM-Kacheln schlägt fehl (z. B. Meereskachel bei ESA, HTML statt Zip, Verbindung hängt) | Die übrigen Downloads laufen weiter; ein Download ohne neue Daten für eine Minute bricht ab. Danach geht es mit den vorhandenen Kacheln und openrouteservice weiter, und die Meldung nach dem Lauf nennt je Kachel den Grund. Nicht gelieferte Kacheln werden in dieser Sitzung nicht noch einmal angeboten. Halb geladene Dateien bleiben nicht liegen, kaputte Kacheln (falsche Größe) werden ersetzt. |
 | Ungespeicherte Änderungen beim Schließen oder Ordnerwechsel | Rückfrage: Speichern, Verwerfen oder Abbrechen |
 | GPX-Datei unlesbar | Der Track wird in der Liste als fehlerhaft markiert, die übrigen Tracks bleiben nutzbar. |
 

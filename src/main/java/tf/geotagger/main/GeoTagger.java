@@ -248,6 +248,8 @@ public class GeoTagger implements Initializable {
     private Callable<AltitudeEnricher> altitudeService = () -> AltitudeServiceFactory.enricher(Thread::sleep);
     private Predicate<List<String>> confirmDownload = this::confirmDownload;
     private SrtmDownloader srtmDownloader = new SrtmDownloader(new JdkFileDownload());
+    // "format|tile" of tiles a download of this session didn't bring - not asked for again
+    private final Set<String> unavailableTiles = new HashSet<>();
     // counts loadFolder calls - results of an older one are dropped
     private int loadGeneration = 0;
     // DoUndoManager is a singleton - its listener is removed in stop(), otherwise it keeps this window alive
@@ -674,21 +676,24 @@ public class GeoTagger implements Initializable {
                 return;
             }
         }
-        if (missing.isEmpty() || !confirmDownload.test(missing)) {
-            lookUpAltitudes(scope);
+        // tiles a download of this session didn't bring (e.g. sea tiles) - asking again would only repeat it
+        final SrtmFormat format = GeoTaggerPreferences.SRTM_DOWNLOAD_FORMAT.getAsType();
+        final List<String> toDownload = missing.stream().filter(tile -> !unavailableTiles.contains(format + "|" + tile)).toList();
+        if (toDownload.isEmpty() || !confirmDownload.test(toDownload)) {
+            lookUpAltitudes(scope, List.of());
         } else {
-            downloadTiles(missing, scope);
+            downloadTiles(toDownload, format, scope);
         }
     }
 
-    // in the background with progress - afterwards the lookup runs, also if the download failed (with the tiles there)
-    private void downloadTiles(List<String> tiles, List<MediaFile> scope) {
-        final SrtmFormat format = GeoTaggerPreferences.SRTM_DOWNLOAD_FORMAT.getAsType();
+    // in the background with progress - afterwards the lookup runs, also if the download failed (with the tiles there);
+    // its problems are shown with the result of the lookup
+    private void downloadTiles(List<String> tiles, SrtmFormat format, List<MediaFile> scope) {
         final Path srtmFolder = Path.of(GeoTaggerPreferences.SRTM_FOLDER.getAsString().trim());
         final SrtmDownloader downloader = srtmDownloader;
-        final Task<List<String>> task = new Task<>() {
+        final Task<SrtmDownloader.Result> task = new Task<>() {
             @Override
-            protected List<String> call() throws IOException {
+            protected SrtmDownloader.Result call() throws IOException {
                 updateMessage("Downloading SRTM tiles ...");
                 return downloader.download(tiles, format, srtmFolder, (done, total) -> {
                     updateProgress(done, total);
@@ -699,18 +704,20 @@ public class GeoTagger implements Initializable {
         // stays busy until the lookup is done - nothing may slip in between
         task.setOnSucceeded(event -> {
             unbindTask();
-            lookUpAltitudes(scope);
+            final SrtmDownloader.Result result = task.getValue();
+            result.missing().forEach(tile -> unavailableTiles.add(format + "|" + tile));
+            lookUpAltitudes(scope, result.problems());
         });
         task.setOnFailed(event -> {
+            // e.g. the SRTM folder can't be created
             unbindTask();
-            ShowAlerts.getInstance().showAlert(Alert.AlertType.WARNING, GeoTaggerManager.TITLE, "Download of SRTM tiles failed",
-                    String.valueOf(task.getException().getMessage()));
-            lookUpAltitudes(scope);
+            lookUpAltitudes(scope, List.of(String.valueOf(task.getException().getMessage())));
         });
         runTask(task);
     }
 
-    private void lookUpAltitudes(List<MediaFile> scope) {
+    // downloadProblems: what went wrong with the download of the SRTM tiles before
+    private void lookUpAltitudes(List<MediaFile> scope, List<String> downloadProblems) {
         final AltitudeEnricher enricher;
         try {
             enricher = altitudeService.call();
@@ -742,9 +749,17 @@ public class GeoTagger implements Initializable {
             }
             final String summary = AltitudeSummary.text(run);
             statusLabel.setText(summary);
-            if (AltitudeSummary.hasProblems(run)) {
-                ShowAlerts.getInstance().showAlert(Alert.AlertType.WARNING, GeoTaggerManager.TITLE, "Not all altitudes were found",
-                        summary + "\n" + Objects.requireNonNullElse(run.problem(), ""));
+            if (AltitudeSummary.hasProblems(run) || !downloadProblems.isEmpty()) {
+                final StringBuilder text = new StringBuilder(summary);
+                if (run.problem() != null) {
+                    text.append('\n').append(run.problem());
+                }
+                if (!downloadProblems.isEmpty()) {
+                    text.append("\n\nDownload of SRTM tiles:\n").append(String.join("\n", downloadProblems));
+                }
+                ShowAlerts.getInstance().showAlert(Alert.AlertType.WARNING, GeoTaggerManager.TITLE,
+                        AltitudeSummary.hasProblems(run) ? "Not all altitudes were found" : "Not all SRTM tiles were downloaded",
+                        text.toString());
             }
         });
         task.setOnFailed(event -> {

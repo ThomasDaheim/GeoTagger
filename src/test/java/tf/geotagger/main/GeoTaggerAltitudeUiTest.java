@@ -35,11 +35,16 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.OptionalDouble;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
+import javafx.scene.control.Button;
+import javafx.scene.control.ButtonType;
+import javafx.scene.control.DialogPane;
 import javafx.scene.control.Label;
 import javafx.scene.control.TableView;
+import javafx.scene.control.TextArea;
 import javafx.stage.Stage;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
@@ -50,6 +55,7 @@ import org.testfx.api.FxRobot;
 import org.testfx.framework.junit5.ApplicationExtension;
 import org.testfx.framework.junit5.Start;
 import org.testfx.framework.junit5.Stop;
+import org.testfx.util.WaitForAsyncUtils;
 import tf.exiftool.ExifTool;
 import tf.geo.service.SrtmDownloader;
 import tf.geo.service.SrtmElevationProvider;
@@ -90,6 +96,8 @@ class GeoTaggerAltitudeUiTest {
     private final List<List<String>> questions = new ArrayList<>();
     private final List<URI> downloads = new ArrayList<>();
     private boolean answer = true;
+    // false: the download contains no tile, like an HTML page instead of a zip
+    private boolean downloadHasTile = true;
 
     @BeforeAll
     static void requireExifTool() {
@@ -114,7 +122,7 @@ class GeoTaggerAltitudeUiTest {
                 new SrtmDownloader((source, target) -> {
                     downloads.add(source);
                     try (ZipOutputStream zip = new ZipOutputStream(Files.newOutputStream(target))) {
-                        zip.putNextEntry(new ZipEntry("L32/" + TILE + ".hgt"));
+                        zip.putNextEntry(new ZipEntry(downloadHasTile ? "L32/" + TILE + ".hgt" : "L32/readme.txt"));
                         writeTile(zip);
                         zip.closeEntry();
                     }
@@ -243,6 +251,32 @@ class GeoTaggerAltitudeUiTest {
         assertTrue(Files.isRegularFile(srtmFolder.resolve(TILE + ".hgt")));
         assertEquals(TILE_ALTITUDE, fileNamed(robot, "a.jpg").altitude());
         assertTrue(ors.calls().isEmpty());
+    }
+
+    @Test
+    void unavailableTileIsReportedAndNotAskedAgain(FxRobot robot) throws TimeoutException {
+        // final review 5b: a tile the download doesn't bring (sea tile, HTML instead of zip) - the user learns why, and
+        // isn't asked for it again in this session
+        downloadHasTile = false;
+        loadImages(robot);
+        selectOnly(robot);
+
+        robot.clickOn("#findAltitudeButton");
+        WaitForAsyncUtils.waitFor(15, TimeUnit.SECONDS, () -> robot.lookup(".dialog-pane").tryQuery().isPresent());
+        final DialogPane warning = robot.lookup(".dialog-pane").queryAs(DialogPane.class);
+        // ShowAlerts puts the text into a TextArea as expandable content
+        final String text = ((TextArea) warning.getExpandableContent()).getText();
+        assertTrue(text.contains(TILE + ": not contained in the download"), text);
+        robot.interact(() -> ((Button) warning.lookupButton(ButtonType.OK)).fire());
+        UiTestSupport.waitUntilIdle(controller);
+        // the gap came from openrouteservice
+        assertEquals(ORS_ALTITUDE, fileNamed(robot, "a.jpg").altitude());
+
+        selectOnly(robot, "a.jpg");
+        findAltitudes(robot);
+
+        assertEquals(List.of(List.of(TILE)), questions);
+        assertEquals(1, downloads.size());
     }
 
     @Test
