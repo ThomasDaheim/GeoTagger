@@ -26,6 +26,9 @@
 package tf.geotagger.main;
 
 import java.util.prefs.Preferences;
+import tf.geo.service.SrtmFormat;
+import tf.geo.service.SrtmInterpolation;
+import tf.geotagger.enrich.AltitudeSource;
 import tf.geotagger.enrich.PlaceService;
 import tf.helper.general.IPreferencesStore;
 import tf.helper.general.ITypedPreference;
@@ -57,6 +60,12 @@ public enum GeoTaggerPreferences implements ITypedPreference {
     PLACE_LANGUAGE("placeLanguage", "de", String.class),
     // more than one place (e.g. districts) within this distance in km: the user chooses - 0 never asks
     PLACE_CHOICE_RADIUS_KM("placeChoiceRadiusKm", "1.0", Double.class),
+    // "Find altitude": the source, the local SRTM files and how they are read, the key of openrouteservice
+    ALTITUDE_SOURCE("altitudeSource", AltitudeSource.SRTM_FIRST.name(), AltitudeSource.class),
+    SRTM_FOLDER("srtmFolder", "", String.class),
+    SRTM_DOWNLOAD_FORMAT("srtmDownloadFormat", SrtmFormat.SRTM3.name(), SrtmFormat.class),
+    SRTM_INTERPOLATION("srtmInterpolation", SrtmInterpolation.BILINEAR.name(), SrtmInterpolation.class),
+    ORS_API_KEY("orsApiKey", "", String.class),
     RECENT_FOLDER("recentFolder", System.getProperty("user.home"), String.class),
     INCLUDE_SUBFOLDERS("includeSubfolders", Boolean.toString(false), Boolean.class);
 

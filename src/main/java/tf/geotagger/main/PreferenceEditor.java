@@ -29,7 +29,10 @@ import java.io.File;
 import java.math.BigDecimal;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Objects;
+import java.util.OptionalDouble;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import javafx.application.Platform;
@@ -43,6 +46,7 @@ import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
+import javafx.stage.DirectoryChooser;
 import javafx.stage.FileChooser;
 import javafx.stage.Modality;
 import javafx.util.StringConverter;
@@ -51,18 +55,22 @@ import jfxtras.styles.jmetro.Style;
 import tf.exiftool.ExifToolException;
 import tf.geo.LatLon;
 import tf.geo.service.GeoServiceException;
+import tf.geo.service.OpenRouteServiceElevationProvider;
 import tf.geo.service.ReverseGeocoder;
+import tf.geo.service.SrtmFormat;
+import tf.geo.service.SrtmInterpolation;
+import tf.geotagger.enrich.AltitudeSource;
 import tf.geotagger.enrich.PlaceService;
 import tf.geotagger.metadata.ExifToolLocator;
 import tf.helper.javafx.AbstractStage;
 
 /**
- * Preferences of GeoTagger: the ExifTool executable and the service for "Find place". Built in code like GPXEditor's
- * PreferenceEditor.
+ * Preferences of GeoTagger: the ExifTool executable, the service for "Find place" and the sources for "Find altitude".
+ * Built in code like GPXEditor's PreferenceEditor.
  */
 public class PreferenceEditor extends AbstractStage {
     private static final PreferenceEditor INSTANCE = new PreferenceEditor();
-    // "Check" of the place service: Munich
+    // "Check" of the place service and of openrouteservice: Munich
     private static final LatLon CHECK_POSITION = new LatLon(48.137, 11.575);
     private static final double DEFAULT_RADIUS_KM = 1.0;
 
@@ -75,6 +83,13 @@ public class PreferenceEditor extends AbstractStage {
     private final TextField placeChoiceRadius = new TextField();
     private final Button placeCheckButton = new Button("Check");
     private final Label placeCheck = new Label();
+    private final ChoiceBox<AltitudeSource> altitudeSource = new ChoiceBox<>();
+    private final TextField srtmFolder = new TextField();
+    private final ChoiceBox<SrtmFormat> srtmDownloadFormat = new ChoiceBox<>();
+    private final ChoiceBox<SrtmInterpolation> srtmInterpolation = new ChoiceBox<>();
+    private final TextField orsApiKey = new TextField();
+    private final Button orsCheckButton = new Button("Check");
+    private final Label orsCheck = new Label();
 
     private PreferenceEditor() {
         initViewer();
@@ -116,18 +131,7 @@ public class PreferenceEditor extends AbstractStage {
         GridPane.setMargin(exifToolCheck, INSET_TOP);
 
         // "Find place"
-        placeService.getItems().setAll(PlaceService.values());
-        placeService.setConverter(new StringConverter<>() {
-            @Override
-            public String toString(PlaceService service) {
-                return service == null ? "" : service.label();
-            }
-
-            @Override
-            public PlaceService fromString(String text) {
-                return null;
-            }
-        });
+        choices(placeService, PlaceService.values(), PlaceService::label);
         addRow(grid, 2, "Place service:", placeService);
         geoNamesUsername.setPrefColumnCount(30);
         addRow(grid, 3, "GeoNames user:", geoNamesUsername);
@@ -148,6 +152,30 @@ public class PreferenceEditor extends AbstractStage {
         grid.add(placeCheck, 1, 7, 2, 1);
         GridPane.setMargin(placeCheck, INSET_TOP);
 
+        // "Find altitude"
+        choices(altitudeSource, AltitudeSource.values(), AltitudeSource::label);
+        addRow(grid, 8, "Altitude source:", altitudeSource);
+        final Label srtmFolderLabel = new Label("SRTM folder:");
+        grid.add(srtmFolderLabel, 0, 9);
+        GridPane.setMargin(srtmFolderLabel, INSET_TOP);
+        grid.add(srtmFolder, 1, 9);
+        GridPane.setMargin(srtmFolder, INSET_TOP);
+        final Button srtmBrowseButton = new Button("Browse...");
+        srtmBrowseButton.setOnAction(event -> browseSrtmFolder());
+        grid.add(srtmBrowseButton, 2, 9);
+        GridPane.setMargin(srtmBrowseButton, INSET_TOP);
+        choices(srtmDownloadFormat, new SrtmFormat[]{SrtmFormat.SRTM3, SrtmFormat.SRTM1}, SrtmFormat::label);
+        addRow(grid, 10, "Download missing tiles as:", srtmDownloadFormat);
+        choices(srtmInterpolation, SrtmInterpolation.values(), SrtmInterpolation::label);
+        addRow(grid, 11, "SRTM interpolation:", srtmInterpolation);
+        orsApiKey.setPrefColumnCount(30);
+        addRow(grid, 12, "openrouteservice key:", orsApiKey);
+        orsCheckButton.setOnAction(event -> checkOrs());
+        grid.add(orsCheckButton, 0, 13);
+        GridPane.setMargin(orsCheckButton, INSET_TOP);
+        grid.add(orsCheck, 1, 13, 2, 1);
+        GridPane.setMargin(orsCheck, INSET_TOP);
+
         final Button saveButton = new Button("Save");
         saveButton.setOnAction(event -> {
             GeoTaggerPreferences.EXIFTOOL_PATH.put(exifToolPath.getText().trim());
@@ -156,6 +184,11 @@ public class PreferenceEditor extends AbstractStage {
             GeoTaggerPreferences.MAPBOX_ACCESS_TOKEN.put(mapboxAccessToken.getText().trim());
             GeoTaggerPreferences.PLACE_LANGUAGE.put(placeLanguage.getText().trim());
             GeoTaggerPreferences.PLACE_CHOICE_RADIUS_KM.put(radiusKm(placeChoiceRadius.getText()));
+            GeoTaggerPreferences.ALTITUDE_SOURCE.put(altitudeSource.getValue());
+            GeoTaggerPreferences.SRTM_FOLDER.put(srtmFolder.getText().trim());
+            GeoTaggerPreferences.SRTM_DOWNLOAD_FORMAT.put(srtmDownloadFormat.getValue());
+            GeoTaggerPreferences.SRTM_INTERPOLATION.put(srtmInterpolation.getValue());
+            GeoTaggerPreferences.ORS_API_KEY.put(orsApiKey.getText().trim());
             close();
         });
         setActionAccelerator(saveButton);
@@ -184,6 +217,12 @@ public class PreferenceEditor extends AbstractStage {
         final Double radiusKm = GeoTaggerPreferences.PLACE_CHOICE_RADIUS_KM.getAsType();
         placeChoiceRadius.setText(BigDecimal.valueOf(radiusKm).stripTrailingZeros().toPlainString());
         placeCheck.setText("");
+        altitudeSource.setValue(GeoTaggerPreferences.ALTITUDE_SOURCE.getAsType());
+        srtmFolder.setText(GeoTaggerPreferences.SRTM_FOLDER.getAsString());
+        srtmDownloadFormat.setValue(GeoTaggerPreferences.SRTM_DOWNLOAD_FORMAT.getAsType());
+        srtmInterpolation.setValue(GeoTaggerPreferences.SRTM_INTERPOLATION.getAsType());
+        orsApiKey.setText(GeoTaggerPreferences.ORS_API_KEY.getAsString());
+        orsCheck.setText("");
         showAndWait();
         return wasActionButtonPressed();
     }
@@ -236,6 +275,68 @@ public class PreferenceEditor extends AbstractStage {
         }, "GeoTagger-check");
         check.setDaemon(true);
         check.start();
+    }
+
+    private void browseSrtmFolder() {
+        final DirectoryChooser chooser = new DirectoryChooser();
+        chooser.setTitle("Select the folder of the SRTM files");
+        try {
+            final File current = new File(srtmFolder.getText().trim());
+            if (current.isDirectory()) {
+                chooser.setInitialDirectory(current);
+            }
+        } catch (SecurityException ex) {
+            // start in the default folder
+        }
+        final File selected = chooser.showDialog(this);
+        if (selected != null) {
+            srtmFolder.setText(selected.getAbsolutePath());
+        }
+    }
+
+    // the altitude of the check position with the key typed in - in the background like the check of the place service
+    private void checkOrs() {
+        final OpenRouteServiceElevationProvider ors;
+        try {
+            ors = AltitudeServiceFactory.ors(orsApiKey.getText());
+        } catch (GeoServiceException ex) {
+            orsCheck.setText(ex.getMessage());
+            return;
+        }
+        orsCheckButton.setDisable(true);
+        orsCheck.setText("Asking " + ors.name() + " ...");
+        final Thread check = new Thread(() -> {
+            String result;
+            try {
+                final OptionalDouble elevation = ors.elevations(List.of(CHECK_POSITION)).get(0);
+                result = elevation.isPresent() ? "OK - " + Math.round(elevation.getAsDouble()) + " m" : "OK";
+            } catch (GeoServiceException | RuntimeException ex) {
+                result = String.valueOf(ex.getMessage());
+            }
+            final String text = result;
+            Platform.runLater(() -> {
+                orsCheck.setText(text);
+                orsCheckButton.setDisable(false);
+            });
+        }, "GeoTagger-check");
+        check.setDaemon(true);
+        check.start();
+    }
+
+    // the values with their labels
+    private static <T> void choices(ChoiceBox<T> box, T[] values, Function<T, String> label) {
+        box.getItems().setAll(values);
+        box.setConverter(new StringConverter<>() {
+            @Override
+            public String toString(T value) {
+                return value == null ? "" : label.apply(value);
+            }
+
+            @Override
+            public T fromString(String text) {
+                return null;
+            }
+        });
     }
 
     // km from the text field - a comma counts as decimal point, invalid or negative input gives the default
