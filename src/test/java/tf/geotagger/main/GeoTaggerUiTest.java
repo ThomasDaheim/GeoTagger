@@ -87,7 +87,7 @@ class GeoTaggerUiTest {
         UiTestSupport.preparePreferences(exifTool);
         // column widths saved by plan 4 / 4b under the old key - the columns have changed since (see oldColumnSettingsAreIgnored)
         for (int column = 0; column < 6; column++) {
-            GeoTaggerPreferences.INSTANCE.put("mediaTable-ColumnWidth-" + column, "45");
+            GeoTaggerPreferences.store().put("mediaTable-ColumnWidth-" + column, "45");
         }
         manager = UiTestSupport.start(stage);
         controller = manager.controller();

@@ -41,11 +41,19 @@ class PlaceServiceFactoryTest {
         // started without the Gradle test tasks clear() would wipe the real settings
         Assumptions.assumeTrue("tf/geotagger/test".equals(System.getProperty("geotagger.preferences")),
                 "needs -Dgeotagger.preferences=tf/geotagger/test - run it via Gradle");
-        GeoTaggerPreferences.INSTANCE.clear();
+        GeoTaggerPreferences.store().clear();
+    }
+
+    @Test
+    void storedServiceNameIsReadAsEnum() {
+        // as stored before plan 5a - plain text
+        GeoTaggerPreferences.store().put("placeService", "MAPBOX");
+        assertEquals(PlaceService.MAPBOX, PlaceServiceFactory.service());
+        assertEquals(PlaceService.MAPBOX, GeoTaggerPreferences.PLACE_SERVICE.getAsType());
     }
 
     private static void choose(PlaceService service, String geoNamesUser, String mapboxToken, String language) {
-        GeoTaggerPreferences.PLACE_SERVICE.put(service.name());
+        GeoTaggerPreferences.PLACE_SERVICE.put(service);
         GeoTaggerPreferences.GEONAMES_USERNAME.put(geoNamesUser);
         GeoTaggerPreferences.MAPBOX_ACCESS_TOKEN.put(mapboxToken);
         GeoTaggerPreferences.PLACE_LANGUAGE.put(language);

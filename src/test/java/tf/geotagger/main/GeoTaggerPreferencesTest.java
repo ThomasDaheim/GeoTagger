@@ -36,12 +36,12 @@ class GeoTaggerPreferencesTest {
     void testsUseTheirOwnNode() {
         final String key = "testKey-" + UUID.randomUUID();
         try {
-            GeoTaggerPreferences.INSTANCE.put(key, "test value");
+            GeoTaggerPreferences.store().put(key, "test value");
 
             assertEquals("test value", Preferences.userRoot().node("tf/geotagger/test").get(key, null));
             assertNull(Preferences.userNodeForPackage(GeoTaggerManager.class).get(key, null));
         } finally {
-            GeoTaggerPreferences.INSTANCE.remove(key);
+            GeoTaggerPreferences.store().remove(key);
         }
     }
 }

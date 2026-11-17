@@ -151,7 +151,7 @@ public class PreferenceEditor extends AbstractStage {
         final Button saveButton = new Button("Save");
         saveButton.setOnAction(event -> {
             GeoTaggerPreferences.EXIFTOOL_PATH.put(exifToolPath.getText().trim());
-            GeoTaggerPreferences.PLACE_SERVICE.put(placeService.getValue().name());
+            GeoTaggerPreferences.PLACE_SERVICE.put(placeService.getValue());
             GeoTaggerPreferences.GEONAMES_USERNAME.put(geoNamesUsername.getText().trim());
             GeoTaggerPreferences.MAPBOX_ACCESS_TOKEN.put(mapboxAccessToken.getText().trim());
             GeoTaggerPreferences.PLACE_LANGUAGE.put(placeLanguage.getText().trim());

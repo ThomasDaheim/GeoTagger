@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2014ff Thomas Feuster
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
  * 1. Redistributions of source code must retain the above copyright
@@ -11,7 +11,7 @@
  *    documentation and/or other materials provided with the distribution.
  * 3. The name of the author may not be used to endorse or promote products
  *    derived from this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
  * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
@@ -25,24 +25,17 @@
  */
 package tf.geotagger.main;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-import java.util.prefs.BackingStoreException;
-import java.util.prefs.InvalidPreferencesFormatException;
 import java.util.prefs.Preferences;
-import tf.helper.general.GeneralParser;
+import tf.geotagger.enrich.PlaceService;
 import tf.helper.general.IPreferencesStore;
-import tf.helper.general.ObjectsHelper;
+import tf.helper.general.ITypedPreference;
+import tf.helper.general.NodePreferencesStore;
 import tf.helper.general.RecentFiles;
 
 /**
- * Preferences of GeoTagger, stored with java.util.prefs - same pattern as GPXEditorPreferences.
+ * Preferences of GeoTagger, stored with java.util.prefs via JavaHelper's NodePreferencesStore - see plan 5a.
  */
-public enum GeoTaggerPreferences implements IPreferencesStore {
-    INSTANCE("instance", "", String.class),
+public enum GeoTaggerPreferences implements ITypedPreference {
     RECENT_WINDOW_WIDTH("recentWindowWidth", Double.toString(1400), Double.class),
     RECENT_WINDOW_HEIGHT("recentWindowHeight", Double.toString(900), Double.class),
     RECENT_WINDOW_LEFT("recentWindowLeft", Double.toString(-1), Double.class),
@@ -57,8 +50,8 @@ public enum GeoTaggerPreferences implements IPreferencesStore {
     RECENT_TRACK_DIVIDER_POS("recentTrackDividerPos", Double.toString(0.45), Double.class),
 
     EXIFTOOL_PATH("exifToolPath", "", String.class),
-    // "Find place": name of a PlaceService, its credentials and the language of the names ("" = default of the service)
-    PLACE_SERVICE("placeService", "GEONAMES", String.class),
+    // "Find place": the service, its credentials and the language of the names ("" = default of the service)
+    PLACE_SERVICE("placeService", PlaceService.GEONAMES.name(), PlaceService.class),
     GEONAMES_USERNAME("geoNamesUsername", "", String.class),
     MAPBOX_ACCESS_TOKEN("mapboxAccessToken", "", String.class),
     PLACE_LANGUAGE("placeLanguage", "de", String.class),
@@ -70,19 +63,19 @@ public enum GeoTaggerPreferences implements IPreferencesStore {
     // additional preferences not handled here as enums
     // tableview settings: ColumnOrder, ColumnWidth, ColumnVisibility, SortOrder - see tf.helper.javafx.TableViewPreferences
 
-    private static final Preferences MYPREFERENCES = preferencesNode();
+    private static final NodePreferencesStore STORE = new NodePreferencesStore(preferencesNode());
 
     // recently opened folders - like the recent files of GPXEditor
-    private static final RecentFiles MYRECENTFOLDERS = new RecentFiles(INSTANCE, 10, true);
+    private static final RecentFiles RECENT_FOLDERS = new RecentFiles(STORE, 10, true);
 
-    private final String myPrefKey;
-    private final String myDefaultValue;
-    private final Class<?> myClass;
+    private final String key;
+    private final String defaultValue;
+    private final Class<?> valueClass;
 
-    GeoTaggerPreferences(final String key, final String defaultValue, final Class<?> classP) {
-        myPrefKey = key;
-        myDefaultValue = defaultValue;
-        myClass = classP;
+    GeoTaggerPreferences(final String key, final String defaultValue, final Class<?> valueClass) {
+        this.key = key;
+        this.defaultValue = defaultValue;
+        this.valueClass = valueClass;
     }
 
     // tests use their own node (set by the Gradle test tasks) - the real settings stay untouched
@@ -94,75 +87,37 @@ public enum GeoTaggerPreferences implements IPreferencesStore {
         return Preferences.userNodeForPackage(GeoTaggerManager.class);
     }
 
+    /**
+     * @return the store of all preferences of GeoTagger - also for TableViewPreferences and the like
+     */
+    public static NodePreferencesStore store() {
+        return STORE;
+    }
+
+    /**
+     * @return the recently opened folders
+     */
     public static RecentFiles getRecentFolders() {
-        return MYRECENTFOLDERS;
-    }
-
-    public String getAsString() {
-        return get(myPrefKey, myDefaultValue);
-    }
-
-    public <T> T getAsType() {
-        try {
-            return ObjectsHelper.uncheckedCast(GeneralParser.parse(getAsString(), myClass));
-        } catch (Exception ex) {
-            return getDefaultAsType();
-        }
-    }
-
-    public <T> void put(final T value) {
-        put(myPrefKey, value.toString());
-    }
-
-    public <T> T getDefaultAsType() {
-        return ObjectsHelper.uncheckedCast(GeneralParser.parse(myDefaultValue, myClass));
+        return RECENT_FOLDERS;
     }
 
     @Override
-    public String get(final String key, final String defaultValue) {
-        String result = defaultValue;
-        try {
-            result = MYPREFERENCES.get(key, defaultValue);
-        } catch (SecurityException ex) {
-            Logger.getLogger(GeoTaggerPreferences.class.getName()).log(Level.SEVERE, null, ex);
-        }
-        return result;
+    public String getKey() {
+        return key;
     }
 
     @Override
-    public void put(final String key, final String value) {
-        MYPREFERENCES.put(key, value);
+    public String getDefaultValue() {
+        return defaultValue;
     }
 
     @Override
-    public void clear() {
-        try {
-            MYPREFERENCES.clear();
-        } catch (BackingStoreException ex) {
-            Logger.getLogger(GeoTaggerPreferences.class.getName()).log(Level.SEVERE, null, ex);
-        }
+    public Class<?> getValueClass() {
+        return valueClass;
     }
 
     @Override
-    public void remove(final String key) {
-        MYPREFERENCES.remove(key);
-    }
-
-    @Override
-    public void exportPreferences(final OutputStream os) {
-        try {
-            MYPREFERENCES.exportSubtree(os);
-        } catch (BackingStoreException | IOException ex) {
-            Logger.getLogger(GeoTaggerPreferences.class.getName()).log(Level.SEVERE, null, ex);
-        }
-    }
-
-    @Override
-    public void importPreferences(final InputStream is) {
-        try {
-            Preferences.importPreferences(is);
-        } catch (InvalidPreferencesFormatException | IOException ex) {
-            Logger.getLogger(GeoTaggerPreferences.class.getName()).log(Level.SEVERE, null, ex);
-        }
+    public IPreferencesStore getStore() {
+        return STORE;
     }
 }

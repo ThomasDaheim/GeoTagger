@@ -78,11 +78,8 @@ final class PlaceServiceFactory {
      * @return the chosen service - GeoNames if the stored value is unknown
      */
     static PlaceService service() {
-        try {
-            return PlaceService.valueOf(GeoTaggerPreferences.PLACE_SERVICE.getAsString().trim());
-        } catch (IllegalArgumentException ex) {
-            return PlaceService.GEONAMES;
-        }
+        // an unknown stored value gives the default of the preference
+        return GeoTaggerPreferences.PLACE_SERVICE.getAsType();
     }
 
     /**

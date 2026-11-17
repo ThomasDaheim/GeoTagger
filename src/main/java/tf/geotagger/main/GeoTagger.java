@@ -271,7 +271,7 @@ public class GeoTagger implements Initializable {
         rightSplit.setDividerPositions(rightDivider);
         final Double trackDivider = GeoTaggerPreferences.RECENT_TRACK_DIVIDER_POS.getAsType();
         trackSplit.setDividerPositions(trackDivider);
-        TableViewPreferences.loadTableViewPreferences(mediaTable, TABLE_PREFERENCES, GeoTaggerPreferences.INSTANCE);
+        TableViewPreferences.loadTableViewPreferences(mediaTable, TABLE_PREFERENCES, GeoTaggerPreferences.store());
 
         // like GPXEditor - text fields handle ctrl+z themselves, the rest of the window gets undo / redo
         stage.getScene().addEventHandler(KeyEvent.KEY_PRESSED, event -> {
@@ -317,7 +317,7 @@ public class GeoTagger implements Initializable {
         GeoTaggerPreferences.RECENT_RIGHT_DIVIDER_POS.put(rightSplit.getDividerPositions()[0]);
         GeoTaggerPreferences.RECENT_TRACK_DIVIDER_POS.put(trackSplit.getDividerPositions()[0]);
         GeoTaggerPreferences.INCLUDE_SUBFOLDERS.put(includeSubfoldersCheck.isSelected());
-        TableViewPreferences.saveTableViewPreferences(mediaTable, TABLE_PREFERENCES, GeoTaggerPreferences.INSTANCE);
+        TableViewPreferences.saveTableViewPreferences(mediaTable, TABLE_PREFERENCES, GeoTaggerPreferences.store());
         DoUndoManager.getInstance().changeCountProperty().removeListener(undoListener);
         worker.shutdownNow();
         previewPane.dispose();

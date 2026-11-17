@@ -61,7 +61,7 @@ final class UiTestSupport {
         // started without the Gradle test tasks (e.g. another IDE runner) clear() would wipe the real settings
         Assumptions.assumeTrue(TEST_NODE.equals(System.getProperty("geotagger.preferences")),
                 "UI tests need -Dgeotagger.preferences=" + TEST_NODE + " - run them via Gradle");
-        GeoTaggerPreferences.INSTANCE.clear();
+        GeoTaggerPreferences.store().clear();
         GeoTaggerPreferences.EXIFTOOL_PATH.put(exifTool.toString());
     }
 
