@@ -100,8 +100,10 @@ public final class TrackSync {
                 // the track has no altitude here - the old one belongs to the old position (final review of plan 6)
                 values.put(Field.ALTITUDE, null);
             }
-            // videos get no time zone - see spec, section "Felder"
-            if (parameters.writeTimeZone() && file.mediaType() == MediaType.IMAGE) {
+            // videos get no time zone - see spec, section "Felder"; a file with a zone of its own keeps it (user
+            // decision 18.11.2026)
+            if (parameters.writeTimeZone() && file.mediaType() == MediaType.IMAGE
+                    && CameraClock.isCameraTime(file.captureTime(), file.timeOffset())) {
                 values.put(Field.TIME_OFFSET, parameters.cameraZone().getRules().getOffset(result.correctedTime()));
             }
             changes.put(file, values);
@@ -113,7 +115,8 @@ public final class TrackSync {
         if (file.captureTime() == null) {
             return new SyncResult(file, Status.NO_CAPTURE_TIME, null, null, null, null, null);
         }
-        final Instant time = CameraClock.toUtc(file.captureTime(), parameters.cameraZone(), parameters.cameraOffset());
+        // zone and offset only for the camera's files - phone files keep their own time (user decision 18.11.2026)
+        final Instant time = CameraClock.toUtc(file.captureTime(), file.timeOffset(), parameters.cameraZone(), parameters.cameraOffset());
 
         final TrackPoint before = timeline.atOrBefore(time);
         final TrackPoint after = parameters.onlyPastPoints() ? null : timeline.atOrAfter(time);

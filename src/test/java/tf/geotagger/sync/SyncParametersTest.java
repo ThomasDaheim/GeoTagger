@@ -59,9 +59,13 @@ class SyncParametersTest {
     }
 
     @Test
-    void offsetTimeOriginalWinsOverMakerZone() {
-        assertEquals(ZoneOffset.ofHours(1), SyncParameters.suggestedCameraZone(List.of(withOffset(ZoneOffset.ofHours(1)), WITHOUT_OFFSET),
+    void makerZoneWinsOverOffsetTimeOriginal() {
+        // user decision 18.11.2026: the zone is for the camera's files - files with OffsetTimeOriginal (phones) keep
+        // their own time, their offset is only a hint when the camera has no zone in its maker notes
+        assertEquals(ZoneOffset.ofHours(2), SyncParameters.suggestedCameraZone(List.of(withOffset(ZoneOffset.ofHours(1)), WITHOUT_OFFSET),
                 List.of(ZoneOffset.ofHours(2), ZoneOffset.ofHours(2)), BERLIN));
+        assertEquals(ZoneOffset.ofHours(1), SyncParameters.suggestedCameraZone(List.of(withOffset(ZoneOffset.ofHours(1)), WITHOUT_OFFSET),
+                List.of(), BERLIN));
     }
 
     @Test

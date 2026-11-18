@@ -284,8 +284,7 @@ final class SyncDialog {
         final Function<Path, String> name = path -> input.folder() == null ? path.getFileName().toString()
                 : input.folder().relativize(path).toString();
         preview.getColumns().add(column("File", 220, result -> name.apply(result.file().path())));
-        preview.getColumns().add(column("Camera time", 150, result -> result.file().captureTime() == null ? ""
-                : TIME.format(result.file().captureTime().dateTime()) + (result.file().captureTime().utc() ? " UTC" : "")));
+        preview.getColumns().add(column("Camera time", 210, result -> cameraTime(result.file())));
         preview.getColumns().add(column("Corrected time (UTC)", 150, result -> result.correctedTime() == null ? ""
                 : TIME.format(result.correctedTime().atOffset(ZoneOffset.UTC))));
         preview.getColumns().add(column("Position", 220, result -> result.hasPosition()
@@ -595,6 +594,22 @@ final class SyncDialog {
         }
         final Duration offset = Duration.ofDays(days).plusHours(hours).plusMinutes(minutes).plusSeconds(seconds);
         return "-".equals(offsetSign.getValue()) ? offset.negated() : offset;
+    }
+
+    /**
+     * @param file a file of the preview
+     * @return its capture time as stored, with its own zone if it has one - those files keep their time, the camera
+     * zone and offset don't apply (user decision 18.11.2026); empty without capture time
+     */
+    static String cameraTime(MediaFile file) {
+        if (file.captureTime() == null) {
+            return "";
+        }
+        final String time = TIME.format(file.captureTime().dateTime());
+        if (file.captureTime().utc()) {
+            return time + " UTC (own zone)";
+        }
+        return file.timeOffset() == null ? time : time + " " + file.timeOffset() + " (own zone)";
     }
 
     // whole number from min to max - empty gives min; null if invalid

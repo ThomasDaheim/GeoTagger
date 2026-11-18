@@ -31,8 +31,12 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
+import tf.geotagger.model.CaptureTime;
+import tf.geotagger.model.Field;
 import tf.geotagger.model.MediaFile;
+import tf.geotagger.model.MediaType;
 import tf.geotagger.track.TrackPoint;
 import tf.geotagger.track.TrackTimeline;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -151,6 +155,21 @@ class TrackSyncTest {
 
         assertEquals(Instant.parse("2026-09-02T09:05:00Z"), result.correctedTime());
         assertEquals(46.05, result.latitude(), DELTA);
+    }
+
+    @Test
+    void phoneFilesKeepTheirOwnTime() {
+        // user decision 18.11.2026: a DSLR 3 days off doesn't shift the phone's video (UTC) or photo (own offset)
+        final SyncParameters dslr = new SyncParameters(ZoneId.of("Europe/Berlin"), Duration.ofDays(3),
+                SyncParameters.DEFAULT_MAX_GAP, true, false, true, false);
+        final MediaFile video = TestMedia.file(MediaType.VIDEO, new CaptureTime(LocalDateTime.parse("2026-09-02T09:05:00"), true), Map.of());
+        final MediaFile photo = TestMedia.file(MediaType.IMAGE, new CaptureTime(LocalDateTime.parse("2026-09-02T11:05:00"), false),
+                Map.of(Field.TIME_OFFSET, ZoneOffset.ofHours(2)));
+        final MediaFile camera = shotAt("11:05:00");
+
+        assertEquals(Instant.parse("2026-09-02T09:05:00Z"), match(video, dslr).correctedTime());
+        assertEquals(Instant.parse("2026-09-02T09:05:00Z"), match(photo, dslr).correctedTime());
+        assertEquals(Instant.parse("2026-08-30T09:05:00Z"), match(camera, dslr).correctedTime());
     }
 
     @Test

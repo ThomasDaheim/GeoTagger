@@ -170,7 +170,8 @@ Nach dem Laden eines Ordners ist die Karte auf alle Dateien eingepasst. Die erst
   - alle GPX-Dateien in einem Ordner **samt Unterordnern** (z. B. ein zentrales GPX-Archiv mit einem Ordner je Jahr; Entscheidung vom 18.11.2026)
   - GPX-Datei und -Ordner werden im Hintergrund gelesen, mit Fortschritt, und für die Sitzung gemerkt. Ein Index ist nicht nötig: üblich sind 1–2 Dateien bis 30 MB. Unlesbare Dateien und Dateien ohne Punkte mit Zeit stehen mit Grund unter der Zusammenfassung.
 - **Dateien:** „Ohne Koordinaten“ (die gelisteten Dateien) oder „Auswahl“. Vorgewählt ist „Auswahl“, wenn der Nutzer selbst Dateien ausgewählt hat, sonst „Ohne Koordinaten“ (wie die Regel der Werkzeugleiste). Dazu das Häkchen „Vorhandene überschreiben“ für die Auswahl, standardmäßig aus.
-- **Zeitzone der Kamera:** vorbelegt mit dem häufigsten `OffsetTimeOriginal` der Dateien, sonst der Zeitzone aus den Maker Notes (`Canon:TimeZone`, Sommerzeit eingerechnet), sonst der Systemzeitzone (Entscheidung vom 18.11.2026). Die Maker Notes liest GeoTagger erst beim Öffnen des Dialogs für bis zu 20 Dateien, weil das Laden sie mit `-fast2` überspringt.
+- **Nur für die Dateien der Kamera** (Entscheidung vom 18.11.2026): Zeitzone und Offset gelten für Dateien mit lokaler Zeit ohne eigene Zone. Dateien mit eigener Zeit behalten sie: Fotos mit `OffsetTimeOriginal` und Videos mit QuickTime-UTC-Zeit, also typischerweise die des Smartphones, das auch den GPX-Track aufzeichnet. Die Vorschau zeigt bei ihnen „(own zone)“.
+- **Zeitzone der Kamera:** vorbelegt mit der häufigsten Zeitzone aus den Maker Notes (`Canon:TimeZone`, Sommerzeit eingerechnet), sonst dem häufigsten `OffsetTimeOriginal` der Dateien als Hinweis, sonst der Systemzeitzone (Entscheidungen vom 18.11.2026). Die Maker Notes liest GeoTagger erst beim Öffnen des Dialogs für bis zu 20 Dateien, weil das Laden sie mit `-fast2` überspringt.
 - **Zusätzlicher Offset:** Vorzeichen, Tage, Stunden, Minuten, Sekunden.
 - **Kamera-Uhrzeit:** Diese Anzeige zeigt live die jetzige Systemzeit mit Zeitzone und Offset. Der Nutzer stellt Zeitzone und Offset so ein, dass sie mit dem Kameradisplay übereinstimmt.
 - **Maximale Zeitdifferenz** zum nächsten Trackpunkt, standardmäßig 30 min.
@@ -178,7 +179,7 @@ Nach dem Laden eines Ordners ist die Karte auf alle Dateien eingepasst. Die erst
 - **Häkchen:**
   - „Keine Trackpunkte in der Zukunft berücksichtigen“
   - „Höhe aus Track übernehmen“ (Standard an). Es betrifft nur Dateien, die in diesem Lauf Koordinaten bekommen.
-  - „Zeitzone in Datei schreiben“ (Standard aus). Es setzt die gewählte Kamera-Zeitzone als `OffsetTimeOriginal` für die zugeordneten Dateien.
+  - „Zeitzone in Datei schreiben“ (Standard aus). Es setzt die gewählte Kamera-Zeitzone als `OffsetTimeOriginal` für die zugeordneten Dateien der Kamera; eine eigene Zone bleibt.
 - **Gemerkt** werden alle Parameter außer der Zeitzone: Track-Quelle, GPX-Datei, GPX-Ordner, Offset, maximale Differenz, Zuweisung, die Häkchen und „Vorhandene überschreiben“. Ungültige Eingaben (Zeitzone, Offset, maximale Differenz) sind rot und sperren „Apply“.
 
 **Vorschau**
@@ -194,7 +195,7 @@ Nach dem Laden eines Ordners ist die Karte auf alle Dateien eingepasst. Die erst
 
 **Algorithmus**
 
-1. Die Kamerazeit wird mit Zeitzone und Offset in UTC umgerechnet.
+1. Die Kamerazeit wird mit Zeitzone und Offset in UTC umgerechnet. Hat die Datei eine eigene Zone (`OffsetTimeOriginal`) oder eine UTC-Zeit, gilt diese ohne Offset.
 2. In der nach Zeit sortierten Punktliste aller Track-Quellen wird der Vorgänger und der Nachfolger gesucht.
 3. Ist der kleinere Abstand größer als das Maximum, gibt es keinen Treffer.
 4. Bei Interpolation wird linear zwischen Vorgänger und Nachfolger interpoliert, die Höhe ebenso. Liegt nur einer der beiden innerhalb des Maximums, wird dieser Punkt genommen.

@@ -108,6 +108,19 @@ class TrackSyncChangesTest {
     }
 
     @Test
+    void ownTimeZoneIsNotOverwritten() {
+        // user decision 18.11.2026: the camera zone is written only to the camera's files
+        final MediaFile phone = TestMedia.file(MediaType.IMAGE, new CaptureTime(INSIDE, false), Map.of(Field.TIME_OFFSET, ZoneOffset.ofHours(2)));
+        final SyncParameters parameters = new SyncParameters(ZoneOffset.UTC, Duration.ZERO, SyncParameters.DEFAULT_MAX_GAP, true, false,
+                true, true);
+
+        final Map<Field, Object> values = TrackSync.changes(TrackSync.match(List.of(phone), TIMELINE, parameters), parameters).get(phone);
+
+        assertTrue(values.containsKey(Field.LATITUDE));
+        assertFalse(values.containsKey(Field.TIME_OFFSET));
+    }
+
+    @Test
     void oldAltitudeGoesWhenTheTrackHasNone() {
         // final review of plan 6: overwriting the position with a track without <ele> kept the altitude of the old place
         final MediaFile moved = TestMedia.file(MediaType.IMAGE, new CaptureTime(INSIDE, false),

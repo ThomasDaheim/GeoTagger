@@ -33,6 +33,8 @@ import java.time.ZoneOffset;
 import org.junit.jupiter.api.Test;
 import tf.geotagger.model.CaptureTime;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CameraClockTest {
     private static final ZoneId BERLIN = ZoneId.of("Europe/Berlin");
@@ -68,10 +70,23 @@ class CameraClockTest {
     }
 
     @Test
-    void utcCaptureTimeIgnoresTheZoneButNotTheOffset() {
+    void utcCaptureTimeIgnoresZoneAndOffset() {
+        // user decision 18.11.2026: zone and offset are for the camera - a phone video (QuickTime UTC) has its own
+        // correct time, like the GPX track recorded on the same phone
         final CaptureTime utc = new CaptureTime(LocalDateTime.parse("2026-09-02T09:08:00"), true);
-        assertEquals(Instant.parse("2026-09-02T09:08:00Z"), CameraClock.toUtc(utc, BERLIN, Duration.ZERO));
-        assertEquals(Instant.parse("2026-09-02T08:08:00Z"), CameraClock.toUtc(utc, BERLIN, Duration.ofHours(1)));
+        assertEquals(Instant.parse("2026-09-02T09:08:00Z"), CameraClock.toUtc(utc, null, BERLIN, Duration.ZERO));
+        assertEquals(Instant.parse("2026-09-02T09:08:00Z"), CameraClock.toUtc(utc, null, BERLIN, Duration.ofDays(3)));
+        assertFalse(CameraClock.isCameraTime(utc, null));
+    }
+
+    @Test
+    void ownOffsetTimeOriginalIgnoresZoneAndOffset() {
+        // a phone photo with OffsetTimeOriginal: its time is absolute
+        final CaptureTime local = local("2026-09-02T11:08:00");
+        assertEquals(Instant.parse("2026-09-02T09:08:00Z"),
+                CameraClock.toUtc(local, ZoneOffset.ofHours(2), ZoneOffset.UTC, Duration.ofDays(3)));
+        assertFalse(CameraClock.isCameraTime(local, ZoneOffset.ofHours(2)));
+        assertTrue(CameraClock.isCameraTime(local, null));
     }
 
     @Test

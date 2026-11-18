@@ -66,8 +66,9 @@ public record SyncParameters(ZoneId cameraZone, Duration cameraOffset, Duration 
     }
 
     /**
-     * Most frequent OffsetTimeOriginal of the files, otherwise the most frequent zone of the maker notes (e.g.
-     * Canon:TimeZone), otherwise the fallback (usually the system zone) - user decision 18.11.2026.
+     * Most frequent zone of the maker notes (e.g. Canon:TimeZone), otherwise the most frequent OffsetTimeOriginal of
+     * the files, otherwise the fallback (usually the system zone). The zone applies to the camera's files only - files
+     * with OffsetTimeOriginal keep their own time, their offset is just a hint (user decisions 18.11.2026).
      *
      * @param files files of the sync
      * @param makerZones zones of the maker notes of (some of) the files - read only for the dialog, see
@@ -76,8 +77,8 @@ public record SyncParameters(ZoneId cameraZone, Duration cameraOffset, Duration 
      * @return suggested camera zone for the sync dialog
      */
     public static ZoneId suggestedCameraZone(List<MediaFile> files, Collection<ZoneOffset> makerZones, ZoneId fallback) {
-        return mostFrequent(files.stream().map(MediaFile::timeOffset).toList())
-                .or(() -> mostFrequent(List.copyOf(makerZones)))
+        return mostFrequent(List.copyOf(makerZones))
+                .or(() -> mostFrequent(files.stream().map(MediaFile::timeOffset).toList()))
                 .<ZoneId>map(zone -> zone)
                 .orElse(fallback);
     }

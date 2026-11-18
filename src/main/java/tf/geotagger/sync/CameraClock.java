@@ -40,12 +40,46 @@ public final class CameraClock {
     private CameraClock() {
     }
 
+    /**
+     * The real time of a capture - zone and offset are for the camera's files only (user decision 18.11.2026): a file
+     * with its own time zone (OffsetTimeOriginal) or a UTC time (QuickTime of phone videos) has a correct, absolute
+     * time, like the GPX track recorded on the same phone.
+     *
+     * @param captureTime capture time as stored in the file
+     * @param ownOffset the file's OffsetTimeOriginal, null if it has none
+     * @param cameraZone zone the camera clock is set to
+     * @param cameraOffset deviation of the camera clock, positive = camera ahead
+     * @return the capture time in UTC
+     */
+    public static Instant toUtc(CaptureTime captureTime, ZoneOffset ownOffset, ZoneId cameraZone, Duration cameraOffset) {
+        if (captureTime.utc()) {
+            return captureTime.dateTime().toInstant(ZoneOffset.UTC);
+        }
+        if (ownOffset != null) {
+            return captureTime.dateTime().toInstant(ownOffset);
+        }
+        return captureTime.dateTime().atZone(cameraZone).toInstant().minus(cameraOffset);
+    }
+
+    /**
+     * @param captureTime capture time as stored in the file
+     * @param ownOffset the file's OffsetTimeOriginal, null if it has none
+     * @return true if the camera zone and offset apply - a local time without a zone of its own
+     */
+    public static boolean isCameraTime(CaptureTime captureTime, ZoneOffset ownOffset) {
+        return !captureTime.utc() && ownOffset == null;
+    }
+
+    /**
+     * The real time of a capture by the camera clock - for local times without a zone of their own.
+     *
+     * @param captureTime capture time as stored in the file
+     * @param cameraZone zone the camera clock is set to
+     * @param cameraOffset deviation of the camera clock, positive = camera ahead
+     * @return the capture time in UTC
+     */
     public static Instant toUtc(CaptureTime captureTime, ZoneId cameraZone, Duration cameraOffset) {
-        final Instant recorded = captureTime.utc()
-                // QuickTime CreateDate - already UTC, the camera zone doesn't matter
-                ? captureTime.dateTime().toInstant(ZoneOffset.UTC)
-                : captureTime.dateTime().atZone(cameraZone).toInstant();
-        return recorded.minus(cameraOffset);
+        return toUtc(captureTime, null, cameraZone, cameraOffset);
     }
 
     /**
