@@ -93,8 +93,20 @@ class WriteArgsBuilderTest {
         media.set(Field.LONGITUDE, 11.25);
         assertEquals(List.of(
                 "-XMP-exif:GPSLatitude#=46.5", "-XMP-exif:GPSLongitude#=11.25",
-                "-Keys:GPSCoordinates#=46.5 11.25 100"),
+                "-Keys:GPSCoordinates#=46.5 11.25 100", "-UserData:GPSCoordinates#=46.5 11.25 100"),
                 WriteArgsBuilder.assignments(FormatProfile.QUICKTIME, media));
+    }
+
+    @Test
+    void quickTimeUserDataGetsTheAltitudeToo() {
+        // user decision 18.11.2026: ©xyz (read by Android / Google Photos) is always written - before, a moved video
+        // kept the camera's old position there
+        final Map<Field, Object> original = new EnumMap<>(Field.class);
+        original.put(Field.LATITUDE, 46.7411);
+        original.put(Field.LONGITUDE, 11.2048);
+        final MediaFile media = file(FormatProfile.QUICKTIME, original);
+        media.set(Field.ALTITUDE, 498.6);
+        assertTrue(WriteArgsBuilder.assignments(FormatProfile.QUICKTIME, media).contains("-UserData:GPSCoordinates#=46.7411 11.2048 498.6"));
     }
 
     @Test
@@ -105,6 +117,7 @@ class WriteArgsBuilderTest {
         final MediaFile media = file(FormatProfile.QUICKTIME, original);
         media.set(Field.LATITUDE, null);
         assertTrue(WriteArgsBuilder.assignments(FormatProfile.QUICKTIME, media).contains("-Keys:GPSCoordinates="));
+        assertTrue(WriteArgsBuilder.assignments(FormatProfile.QUICKTIME, media).contains("-UserData:GPSCoordinates="));
     }
 
     @Test

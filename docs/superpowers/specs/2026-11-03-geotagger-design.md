@@ -69,8 +69,8 @@ Videos durchlaufen denselben Ablauf.
 
 | Feld | Quelle | Ziel-Tags |
 |---|---|---|
-| Breite, Länge | Track-Sync, Karte, manuell | EXIF GPS bzw. QuickTime GPS, XMP `exif:GPS*` |
-| Höhe | Track, openrouteservice, SRTM, manuell | EXIF `GPSAltitude` und `GPSAltitudeRef`, XMP |
+| Breite, Länge | Track-Sync, Karte, manuell | EXIF GPS bzw. bei Videos QuickTime `Keys:GPSCoordinates` (Apple) und `UserData:GPSCoordinates` (`©xyz`, Android / Google Photos) – immer beide, sonst behielte `©xyz` die alte Position der Kamera (Entscheidung 18.11.2026); XMP `exif:GPS*` |
+| Höhe | Track, openrouteservice, SRTM, manuell | EXIF `GPSAltitude` und `GPSAltitudeRef`, bei Videos zusätzlich in beiden QuickTime-`GPSCoordinates`; XMP |
 | Ländercode, Land, Region, Ort, Sublocation | Reverse-Geocoding, manuell | IPTC (`Country-PrimaryLocationCode`, `Country-PrimaryLocationName`, `Province-State`, `City`, `Sub-location`) und XMP (`photoshop:*`, `Iptc4xmpCore:*`), jeweils konsistent |
 | Zeitzone der Aufnahme | Kamera-Zeitzone aus dem Sync-Dialog, manuell | EXIF `OffsetTimeOriginal`. Bei Videos und Sidecar-Dateien wird sie in Version 1 nicht geschrieben, weil es dafür kein Standard-Tag gibt, das die Aufnahmezeit unberührt lässt. |
 

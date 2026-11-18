@@ -304,6 +304,16 @@ class MetadataWriterTest {
             assertSaved(writer.save(List.of(media)));
 
             assertAll(load(copy), FormatProfile.of(copy).orElseThrow().writesExif());
+            if (FormatProfile.of(copy).orElseThrow() == FormatProfile.QUICKTIME) {
+                // both places of QuickTime: Keys (Apple) and UserData ©xyz (Android, Google Photos) - user decision 18.11.2026
+                for (String tag : List.of("Keys:GPSCoordinates", "UserData:GPSCoordinates")) {
+                    final String[] values = String.valueOf(tags(copy, tag).get(tag)).split(" ");
+                    assertEquals(3, values.length, tag + ": " + String.join(" ", values));
+                    assertEquals(-33.856784, Double.parseDouble(values[0]), 1e-4, tag);
+                    assertEquals(151.215297, Double.parseDouble(values[1]), 1e-4, tag);
+                    assertEquals(-12.5, Double.parseDouble(values[2]), 0.1, tag);
+                }
+            }
         }));
     }
 }

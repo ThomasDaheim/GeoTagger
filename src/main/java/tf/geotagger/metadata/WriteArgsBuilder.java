@@ -103,14 +103,14 @@ final class WriteArgsBuilder {
         assignNumeric(args, "XMP-exif:GPSAltitudeRef", ref);
     }
 
+    // both places of QuickTime: Keys (Apple) and UserData ©xyz (Android, Google Photos) - otherwise a moved video kept
+    // the camera's old position in ©xyz (user decision 18.11.2026: always write both)
     private static void quickTimeCoordinates(List<String> args, MediaFile file) {
-        if (!file.hasCoordinates()) {
-            assignNumeric(args, "Keys:GPSCoordinates", null);
-            return;
-        }
         final Double altitude = file.altitude();
-        assignNumeric(args, "Keys:GPSCoordinates", number(file.latitude()) + " " + number(file.longitude())
-                + (altitude == null ? "" : " " + number(altitude)));
+        final String value = !file.hasCoordinates() ? null : number(file.latitude()) + " " + number(file.longitude())
+                + (altitude == null ? "" : " " + number(altitude));
+        assignNumeric(args, "Keys:GPSCoordinates", value);
+        assignNumeric(args, "UserData:GPSCoordinates", value);
     }
 
     private static void place(List<String> args, FormatProfile profile, Map<Field, Object> changes) {
