@@ -25,6 +25,10 @@
  */
 package tf.geotagger.main;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.time.DateTimeException;
 import java.time.Duration;
@@ -36,12 +40,15 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import javafx.animation.Animation;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
 import javafx.beans.property.ReadOnlyStringWrapper;
+import javafx.concurrent.Task;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
@@ -63,6 +70,8 @@ import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
+import javafx.stage.DirectoryChooser;
+import javafx.stage.FileChooser;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.stage.Window;
@@ -77,6 +86,7 @@ import tf.geotagger.sync.SyncResult;
 import tf.geotagger.sync.SyncSummary;
 import tf.geotagger.sync.TrackSource;
 import tf.geotagger.sync.TrackSync;
+import tf.geotagger.track.GpxReader;
 import tf.geotagger.track.TrackPoint;
 import tf.geotagger.track.TrackTimeline;
 
@@ -89,6 +99,8 @@ final class SyncDialog {
     private static final String INVALID = "invalid";
     private static final int MAX_DAYS = 999;
     private static final int MAX_GAP_MINUTES = 1440;
+    // unusable GPX files listed below the summary at most
+    private static final int MAX_FAILURES = 5;
 
     /**
      * What the dialog works on.
@@ -149,6 +161,19 @@ final class SyncDialog {
     private final Button cancelButton = new Button("Cancel");
     private final Timeline clock = new Timeline(new KeyFrame(javafx.util.Duration.seconds(1), event -> updateClock()));
 
+    // reads GPX files in the background - one at a time, ends with the dialog
+    private final ExecutorService reader = Executors.newSingleThreadExecutor(runnable -> {
+        final Thread thread = new Thread(runnable, "GeoTagger-sync-gpx");
+        thread.setDaemon(true);
+        return thread;
+    });
+    // the GPX file or folder whose points are shown, null for the loaded tracks or nothing chosen
+    private Path sourcePath;
+    // its points - empty while it is read or if it couldn't be read
+    private Optional<TrackTimeline.LoadResult> sourceResult = Optional.empty();
+    // shown instead of the preview while reading or if the path can't be used, null otherwise
+    private String sourceMessage;
+
     // current state of the inputs - null while invalid
     private ZoneId currentZone;
     private Duration currentOffset;
@@ -179,6 +204,7 @@ final class SyncDialog {
         dialog.clock.play();
         dialog.stage.showAndWait();
         dialog.clock.stop();
+        dialog.reader.shutdownNow();
         return Optional.ofNullable(dialog.outcome.get());
     }
 
@@ -193,7 +219,9 @@ final class SyncDialog {
         sourceLoaded.setText(TrackSource.LOADED_TRACKS.label() + " (" + input.loadedTracks() + ")");
         sourceLoaded.setDisable(input.loadedTracks() == 0);
         final Button browseFile = new Button("Browse...");
+        browseFile.setOnAction(event -> browseFile());
         final Button browseFolder = new Button("Browse...");
+        browseFolder.setOnAction(event -> browseFolder());
         grid.addRow(0, new Label("Tracks:"), new VBox(4, sourceLoaded,
                 row(sourceFile, gpxFile, browseFile), row(sourceFolder, gpxFolder, browseFolder)));
 
@@ -276,13 +304,19 @@ final class SyncDialog {
 
     // the stored parameters, all but the zone - that comes from the files (user decision 18.11.2026)
     private void fill(SyncSettings settings) {
-        switch (settings.source()) {
+        TrackSource source = settings.source();
+        if (source == TrackSource.LOADED_TRACKS && input.loadedTracks() == 0) {
+            // nothing loaded: the remembered GPX file, otherwise the remembered folder
+            source = settings.gpxFile().isBlank() && !settings.gpxFolder().isBlank() ? TrackSource.GPX_FOLDER : TrackSource.GPX_FILE;
+        }
+        switch (source) {
             case LOADED_TRACKS -> sourceGroup.selectToggle(sourceLoaded);
             case GPX_FILE -> sourceGroup.selectToggle(sourceFile);
             case GPX_FOLDER -> sourceGroup.selectToggle(sourceFolder);
         }
         gpxFile.setText(settings.gpxFile());
         gpxFolder.setText(settings.gpxFolder());
+        readSource();
         // own selection: "Selection" like the actions of the toolbar (plan 6)
         filesGroup.selectToggle(input.selected().isEmpty() ? filesWithout : filesSelection);
         overwrite.setSelected(settings.overwrite());
@@ -302,7 +336,23 @@ final class SyncDialog {
     }
 
     private void listen() {
-        sourceGroup.selectedToggleProperty().addListener((observable, oldValue, newValue) -> recompute());
+        sourceGroup.selectedToggleProperty().addListener((observable, oldValue, newValue) -> {
+            readSource();
+            recompute();
+        });
+        // Enter or leaving the field reads the path typed in
+        for (TextField path : List.of(gpxFile, gpxFolder)) {
+            path.setOnAction(event -> {
+                readSource();
+                recompute();
+            });
+            path.focusedProperty().addListener((observable, oldValue, focused) -> {
+                if (!focused) {
+                    readSource();
+                    recompute();
+                }
+            });
+        }
         filesGroup.selectedToggleProperty().addListener((observable, oldValue, newValue) -> recompute());
         assignmentGroup.selectedToggleProperty().addListener((observable, oldValue, newValue) -> recompute());
         for (CheckBox box : List.of(overwrite, onlyPast, takeAltitude, writeZone)) {
@@ -336,28 +386,154 @@ final class SyncDialog {
         final List<MediaFile> files = scope();
         final int skipped = fileScope() == FileScope.SELECTION ? input.selected().size() - files.size() : 0;
         final Optional<TrackTimeline> timeline = timeline();
-        final String problem = currentZone == null ? "Unknown time zone"
+        final String problem = sourceMessage != null ? sourceMessage
+                : currentZone == null ? "Unknown time zone"
                 : currentOffset == null ? "Invalid offset"
                 : currentMaxGap == null ? "Max. time difference must be 1 - " + MAX_GAP_MINUTES + " min"
                 : timeline.isEmpty() ? "No track points" : null;
         if (problem != null) {
             results = List.of();
             preview.getItems().clear();
-            summary.setText(problem);
+            summary.setText(problem + failures());
         } else {
             results = TrackSync.match(files, timeline.get(), parameters());
             preview.getItems().setAll(results);
-            summary.setText(SyncSummary.text(results, skipped));
+            summary.setText(SyncSummary.text(results, skipped) + failures());
         }
         applyButton.setDisable(results.stream().noneMatch(SyncResult::hasPosition));
     }
 
-    // the track points of the chosen source - GPX file and folder follow in task 5 of plan 6
+    // the track points of the chosen source
     private Optional<TrackTimeline> timeline() {
-        if (sourceGroup.getSelectedToggle() == sourceLoaded && !loadedTimeline.isEmpty()) {
-            return Optional.of(loadedTimeline);
+        if (sourceGroup.getSelectedToggle() == sourceLoaded) {
+            return loadedTimeline.isEmpty() ? Optional.empty() : Optional.of(loadedTimeline);
         }
-        return Optional.empty();
+        return sourceResult.map(TrackTimeline.LoadResult::timeline).filter(timeline -> !timeline.isEmpty());
+    }
+
+    // GPX files of the source that couldn't be used - at most MAX_FAILURES lines
+    private String failures() {
+        if (sourceGroup.getSelectedToggle() == sourceLoaded || sourceResult.isEmpty() || sourceResult.get().failures().isEmpty()) {
+            return "";
+        }
+        final StringBuilder text = new StringBuilder();
+        sourceResult.get().failures().entrySet().stream().limit(MAX_FAILURES).forEach(failure ->
+                text.append('\n').append(failure.getKey().getFileName()).append(": ").append(failure.getValue()));
+        if (sourceResult.get().failures().size() > MAX_FAILURES) {
+            text.append("\n...");
+        }
+        return text.toString();
+    }
+
+    // the path of the chosen source - read in the background unless read before in this session
+    private void readSource() {
+        final TextField field = sourceGroup.getSelectedToggle() == sourceFile ? gpxFile
+                : sourceGroup.getSelectedToggle() == sourceFolder ? gpxFolder : null;
+        if (field == null) {
+            sourcePath = null;
+            sourceResult = Optional.empty();
+            sourceMessage = null;
+            return;
+        }
+        final Path path = path(field.getText());
+        if (path == null) {
+            sourcePath = null;
+            sourceResult = Optional.empty();
+            sourceMessage = field == gpxFile ? "Choose a GPX file" : "Choose a folder with GPX files";
+            return;
+        }
+        if (path.equals(sourcePath)) {
+            // read already or being read
+            return;
+        }
+        sourcePath = path;
+        final TrackTimeline.LoadResult cached = input.cache().get(path);
+        if (cached != null) {
+            sourceResult = Optional.of(cached);
+            sourceMessage = null;
+            return;
+        }
+        sourceResult = Optional.empty();
+        sourceMessage = "Reading GPX files ...";
+        final boolean folder = field == gpxFolder;
+        final Task<TrackTimeline.LoadResult> task = new Task<>() {
+            @Override
+            protected TrackTimeline.LoadResult call() throws IOException {
+                final List<Path> files = folder ? GpxReader.findGpxFiles(path, true) : List.of(path);
+                if (files.isEmpty()) {
+                    throw new IOException("No GPX files in " + path);
+                }
+                return TrackTimeline.load(files, (done, total) -> updateMessage("Reading GPX files: " + done + " / " + total));
+            }
+        };
+        task.messageProperty().addListener((observable, oldValue, message) -> {
+            if (path.equals(sourcePath) && message != null && !message.isEmpty()) {
+                sourceMessage = message;
+                summary.setText(message);
+            }
+        });
+        task.setOnSucceeded(event -> {
+            input.cache().put(path, task.getValue());
+            if (path.equals(sourcePath)) {
+                sourceResult = Optional.of(task.getValue());
+                sourceMessage = null;
+                recompute();
+            }
+        });
+        task.setOnFailed(event -> {
+            if (path.equals(sourcePath)) {
+                sourceResult = Optional.empty();
+                sourceMessage = String.valueOf(task.getException().getMessage());
+                recompute();
+            }
+        });
+        reader.submit(task);
+    }
+
+    private void browseFile() {
+        final FileChooser chooser = new FileChooser();
+        chooser.setTitle("Select a GPX file");
+        chooser.getExtensionFilters().addAll(new FileChooser.ExtensionFilter("GPX files", "*.gpx", "*.GPX"),
+                new FileChooser.ExtensionFilter("All files", "*.*"));
+        final Path current = path(gpxFile.getText());
+        if (current != null && current.getParent() != null && Files.isDirectory(current.getParent())) {
+            chooser.setInitialDirectory(current.getParent().toFile());
+        }
+        final File selected = chooser.showOpenDialog(stage);
+        if (selected != null) {
+            gpxFile.setText(selected.getAbsolutePath());
+            sourceGroup.selectToggle(sourceFile);
+            readSource();
+            recompute();
+        }
+    }
+
+    private void browseFolder() {
+        final DirectoryChooser chooser = new DirectoryChooser();
+        chooser.setTitle("Select a folder with GPX files");
+        final Path current = path(gpxFolder.getText());
+        if (current != null && Files.isDirectory(current)) {
+            chooser.setInitialDirectory(current.toFile());
+        }
+        final File selected = chooser.showDialog(stage);
+        if (selected != null) {
+            gpxFolder.setText(selected.getAbsolutePath());
+            sourceGroup.selectToggle(sourceFolder);
+            readSource();
+            recompute();
+        }
+    }
+
+    // absolute path of the text - null if empty or not a path
+    private static Path path(String text) {
+        if (text == null || text.isBlank()) {
+            return null;
+        }
+        try {
+            return Path.of(text.trim()).toAbsolutePath().normalize();
+        } catch (InvalidPathException ex) {
+            return null;
+        }
     }
 
     private SyncParameters parameters() {

@@ -344,6 +344,101 @@ class GeoTaggerSyncUiTest {
         assertTrue(robot.lookup("#undoButton").queryButton().isDisabled());
     }
 
+    // sets the path of the GPX file / folder like typing it and pressing Enter, waits until it is read
+    private static void chooseSource(FxRobot robot, String radio, String field, Path path) throws TimeoutException {
+        click(robot, radio);
+        final TextField text = robot.lookup(field).queryAs(TextField.class);
+        robot.interact(() -> {
+            text.setText(path.toString());
+            text.fireEvent(new javafx.event.ActionEvent());
+        });
+        WaitForAsyncUtils.waitFor(10, TimeUnit.SECONDS, () -> !summary(robot).startsWith("Reading"));
+        WaitForAsyncUtils.waitForFxEvents();
+    }
+
+    @Test
+    void gpxFileSource(FxRobot robot) throws IOException, TimeoutException {
+        loadFolder(robot);
+        selectOnly(robot);
+        openSync(robot);
+
+        chooseSource(robot, "#syncSourceFile", "#syncGpxFile", dir.resolve("tour.gpx"));
+
+        assertEquals(SyncResult.Status.MATCHED, row(robot, "a.jpg").status());
+        assertFalse(applyDisabled(robot));
+    }
+
+    @Test
+    void gpxFolderSourceSearchesSubfolders(FxRobot robot) throws IOException, TimeoutException {
+        // user decision 18.11.2026: a GPX archive with a folder per year
+        final Path year = Files.createDirectories(dir.resolve("gps").resolve("2026"));
+        Files.writeString(year.resolve("tour.gpx"), TOUR, StandardCharsets.UTF_8);
+        loadFolder(robot);
+        selectOnly(robot);
+        openSync(robot);
+
+        chooseSource(robot, "#syncSourceFolder", "#syncGpxFolder", dir.resolve("gps"));
+
+        assertEquals(SyncResult.Status.MATCHED, row(robot, "a.jpg").status());
+    }
+
+    @Test
+    void unreadableGpxIsReported(FxRobot robot) throws IOException, TimeoutException {
+        final Path broken = Files.writeString(dir.resolve("broken.gpx"), "no xml", StandardCharsets.UTF_8);
+        loadFolder(robot);
+        selectOnly(robot);
+        openSync(robot);
+
+        chooseSource(robot, "#syncSourceFile", "#syncGpxFile", broken);
+
+        assertTrue(summary(robot).contains("broken.gpx"), summary(robot));
+        assertTrue(applyDisabled(robot));
+    }
+
+    @Test
+    void parametersAreRemembered(FxRobot robot) throws IOException, TimeoutException {
+        loadFolder(robot);
+        loadTour(robot);
+        selectOnly(robot);
+        openSync(robot);
+        setZone(robot, "UTC");
+        setText(robot, "#syncOffsetMinutes", "1");
+        click(robot, "#syncNearest");
+        click(robot, "#syncOnlyPast");
+        // 11:05 UTC isn't near the track - Apply needs a match: back to Berlin, the zone isn't remembered anyway
+        setZone(robot, "Europe/Berlin");
+        apply(robot);
+
+        openSync(robot);
+
+        assertEquals("1", robot.lookup("#syncOffsetMinutes").queryAs(TextField.class).getText());
+        assertTrue(robot.lookup("#syncNearest").queryAs(RadioButton.class).isSelected());
+        assertTrue(robot.lookup("#syncOnlyPast").queryAs(javafx.scene.control.CheckBox.class).isSelected());
+        click(robot, "#syncCancel");
+    }
+
+    @Test
+    void zoneIsSuggestedAgainNotRemembered(FxRobot robot) throws IOException, TimeoutException {
+        loadFolder(robot);
+        loadTour(robot);
+        selectOnly(robot);
+        openSync(robot);
+        // UTC with the camera 2 h ahead gives the same 09:05Z as Berlin - but UTC isn't the zone of the test machine
+        setZone(robot, "UTC");
+        setText(robot, "#syncOffsetHours", "2");
+        assertFalse(applyDisabled(robot));
+        apply(robot);
+        robot.clickOn("#undoButton");
+
+        robot.clickOn("#trackSyncButton");
+        WaitForAsyncUtils.waitFor(10, TimeUnit.SECONDS,
+                () -> robot.lookup("#syncApply").tryQuery().map(Node::isVisible).orElse(false));
+
+        final ComboBox<?> zone = robot.lookup("#syncZone").queryComboBox();
+        assertEquals(java.time.ZoneId.systemDefault().getId(), zone.getEditor().getText());
+        click(robot, "#syncCancel");
+    }
+
     @Test
     void trackSyncIsDisabledWithoutFolder(FxRobot robot) {
         assertTrue(robot.lookup("#trackSyncButton").queryButton().isDisabled());
