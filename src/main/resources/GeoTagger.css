@@ -14,3 +14,23 @@
 .table-cell.changed .text {
     -fx-fill: #e07000;
 }
+
+/* sync dialog: inputs that can't be used */
+.invalid,
+.combo-box.invalid {
+    -fx-border-color: #d00000;
+    -fx-border-width: 1px;
+}
+
+/* sync dialog: rows of the preview - matched, matched with a large gap, no match */
+.table-row-cell.sync-matched .text {
+    -fx-fill: #1a7f1a;
+}
+
+.table-row-cell.sync-large-gap .text {
+    -fx-fill: #e07000;
+}
+
+.table-row-cell.sync-no-match .text {
+    -fx-fill: #888888;
+}

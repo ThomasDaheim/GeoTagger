@@ -40,6 +40,9 @@
             <Button fx:id="findAltitudeButton" text="Find altitude" onAction="#findAltitudes" disable="true">
                 <tooltip><Tooltip text="Altitude from the coordinates (SRTM files, openrouteservice) - for the selected files, or for all listed files without altitude" showDelay="300ms"/></tooltip>
             </Button>
+            <Button fx:id="trackSyncButton" text="Track sync..." onAction="#trackSync" disable="true">
+                <tooltip><Tooltip text="Positions from GPX tracks by the capture time" showDelay="300ms"/></tooltip>
+            </Button>
             <Button fx:id="saveButton" text="Save" onAction="#save" disable="true"/>
             <!-- icons from GPXEditor -->
             <Button fx:id="undoButton" onAction="#undo" disable="true">

@@ -30,11 +30,14 @@ import java.io.IOException;
 import java.net.URL;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -129,6 +132,11 @@ import tf.geotagger.model.MediaFile;
 import tf.geotagger.model.MediaFilter;
 import tf.geotagger.preview.Preview;
 import tf.geotagger.preview.PreviewProvider;
+import tf.geotagger.sync.SyncSummary;
+import tf.geotagger.sync.TrackSync;
+import tf.geotagger.track.GpxTrack;
+import tf.geotagger.track.TrackPoint;
+import tf.geotagger.track.TrackTimeline;
 import tf.helper.doundo.DoUndoManager;
 import tf.helper.javafx.ShowAlerts;
 import tf.helper.javafx.TableViewPreferences;
@@ -148,6 +156,8 @@ public class GeoTagger implements Initializable {
     private static final Path PREVIEW_CACHE = Path.of(System.getProperty("java.io.tmpdir"), "GeoTagger", "preview");
     // ExifTool uses one CPU core - 4 processes read a folder about three times faster (777 files: 19.3 s -> 6.4 s)
     private static final int READ_PROCESSES = Math.min(4, Runtime.getRuntime().availableProcessors());
+    // files whose maker notes are read for the camera zone of the sync dialog - reading maker notes is slow
+    private static final int MAKER_ZONE_FILES = 20;
 
     @FXML
     private SplitMenuButton openFolderButton;
@@ -161,6 +171,8 @@ public class GeoTagger implements Initializable {
     private Button findPlaceButton;
     @FXML
     private Button findAltitudeButton;
+    @FXML
+    private Button trackSyncButton;
     @FXML
     private Button undoButton;
     @FXML
@@ -250,6 +262,8 @@ public class GeoTagger implements Initializable {
     private SrtmDownloader srtmDownloader = new SrtmDownloader(new JdkFileDownload());
     // "format|tile" of tiles a download of this session didn't bring - not asked for again
     private final Set<String> unavailableTiles = new HashSet<>();
+    // GPX files and folders the sync dialog read in this session, by path
+    private final Map<Path, TrackTimeline.LoadResult> gpxCache = new HashMap<>();
     // counts loadFolder calls - results of an older one are dropped
     private int loadGeneration = 0;
     // DoUndoManager is a singleton - its listener is removed in stop(), otherwise it keeps this window alive
@@ -797,6 +811,60 @@ public class GeoTagger implements Initializable {
     }
 
     /**
+     * "Track sync...": positions from GPX tracks by the capture time, see spec "Track-Sync-Dialog" and plan 6. Before
+     * the dialog opens the zones of the maker notes are read for some files without OffsetTimeOriginal - loading skips
+     * the maker notes. The result is one undo step.
+     */
+    @FXML
+    private void trackSync() {
+        if (busy || folder == null || mediaTable.getItems().isEmpty()) {
+            return;
+        }
+        final List<MediaFile> listed = List.copyOf(mediaTable.getItems());
+        final List<MediaFile> selected = selectionByUser ? List.copyOf(selectedFiles()) : List.of();
+        final List<Path> withoutOffset = (selected.isEmpty() ? listed : selected).stream()
+                .filter(file -> file.timeOffset() == null)
+                .limit(MAKER_ZONE_FILES)
+                .map(MediaFile::path)
+                .toList();
+        final MetadataReader zoneReader = reader;
+        if (zoneReader == null || withoutOffset.isEmpty()) {
+            openSyncDialog(listed, selected, List.of());
+            return;
+        }
+        final Task<Collection<ZoneOffset>> task = new Task<>() {
+            @Override
+            protected Collection<ZoneOffset> call() {
+                updateMessage("Reading the camera time zone ...");
+                return List.copyOf(zoneReader.makerZones(withoutOffset).values());
+            }
+        };
+        task.setOnSucceeded(event -> {
+            finishTask();
+            openSyncDialog(listed, selected, task.getValue());
+        });
+        task.setOnFailed(event -> {
+            // without the zone of the maker notes the dialog suggests the system zone
+            finishTask();
+            openSyncDialog(listed, selected, List.of());
+        });
+        runTask(task);
+    }
+
+    private void openSyncDialog(List<MediaFile> listed, List<MediaFile> selected, Collection<ZoneOffset> makerZones) {
+        final List<GpxTrack> loaded = trackListPane.loadedTracks();
+        final List<TrackPoint> points = loaded.stream().flatMap(track -> track.points().stream()).toList();
+        SyncDialog.show(stage, new SyncDialog.SyncInput(folder, listed, selected, points, loaded.size(), makerZones, gpxCache))
+                .ifPresent(outcome -> {
+                    final Map<MediaFile, Map<Field, Object>> changes = TrackSync.changes(outcome.results(), outcome.parameters());
+                    if (!changes.isEmpty()) {
+                        perform(new ChangeFieldsAction("Track sync", changes));
+                    }
+                    statusLabel.setText(SyncSummary.applied(changes.size()));
+                });
+    }
+
+    /**
      * @param service supplies the enricher for "Find altitude" - default from the preferences
      * @param confirm asked with the missing SRTM tiles - true downloads them
      * @param downloader downloads the SRTM tiles
@@ -1027,6 +1095,7 @@ public class GeoTagger implements Initializable {
                 || placeScope(selectionByUser ? selectedFiles() : List.of(), mediaTable.getItems()).isEmpty());
         findAltitudeButton.setDisable(busy || folder == null
                 || altitudeScope(selectionByUser ? selectedFiles() : List.of(), mediaTable.getItems()).isEmpty());
+        trackSyncButton.setDisable(busy || folder == null || mediaTable.getItems().isEmpty());
         undoButton.setDisable(busy || folder == null || !DoUndoManager.getInstance().canUndo(undoKey()));
         redoButton.setDisable(busy || folder == null || !DoUndoManager.getInstance().canDo(undoKey()));
     }
