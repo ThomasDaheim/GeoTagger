@@ -103,6 +103,21 @@ class MetadataParserTest {
     }
 
     @Test
+    void canonTimeZoneInMinutes() {
+        // -n gives minutes, daylight saving included (plan 6)
+        assertEquals(ZoneOffset.ofHours(2), MetadataParser.makerZone(entry("Canon:TimeZone", 120)));
+        assertEquals(ZoneOffset.ofHoursMinutes(-3, -30), MetadataParser.makerZone(entry("Canon:TimeZone", -210)));
+    }
+
+    @Test
+    void implausibleCanonTimeZoneIsIgnored() {
+        assertNull(MetadataParser.makerZone(entry("Canon:TimeZone", 5000)));
+        assertNull(MetadataParser.makerZone(entry("Canon:TimeZone", "abc")));
+        assertNull(MetadataParser.makerZone(entry("Canon:TimeZone", 90.5)));
+        assertNull(MetadataParser.makerZone(entry()));
+    }
+
+    @Test
     void invalidCaptureTimeIsNull() {
         assertNull(MetadataParser.captureTime(entry("QuickTime:CreateDate", "0000:00:00 00:00:00")));
         assertNull(MetadataParser.captureTime(entry()));

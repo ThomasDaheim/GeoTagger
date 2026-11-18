@@ -49,6 +49,21 @@ class SyncParametersTest {
                 Map.of(Field.TIME_OFFSET, offset));
     }
 
+    private static final MediaFile WITHOUT_OFFSET = TestMedia.image(LocalDateTime.parse("2026-09-02T11:08:00"));
+
+    @Test
+    void makerZoneWhenNoFileHasOffsetTimeOriginal() {
+        // user decision 18.11.2026: OffsetTimeOriginal, then the zone of the maker notes, then the system zone
+        assertEquals(ZoneOffset.ofHours(2), SyncParameters.suggestedCameraZone(List.of(WITHOUT_OFFSET),
+                List.of(ZoneOffset.ofHours(2), ZoneOffset.ofHours(1), ZoneOffset.ofHours(2)), BERLIN));
+    }
+
+    @Test
+    void offsetTimeOriginalWinsOverMakerZone() {
+        assertEquals(ZoneOffset.ofHours(1), SyncParameters.suggestedCameraZone(List.of(withOffset(ZoneOffset.ofHours(1)), WITHOUT_OFFSET),
+                List.of(ZoneOffset.ofHours(2), ZoneOffset.ofHours(2)), BERLIN));
+    }
+
     @Test
     void defaultsFollowTheSpec() {
         final SyncParameters parameters = SyncParameters.defaults(BERLIN);
@@ -73,8 +88,8 @@ class SyncParametersTest {
         final List<MediaFile> files = List.of(withOffset(ZoneOffset.ofHours(2)), TestMedia.image(LocalDateTime.parse("2026-09-02T11:08:00")),
                 withOffset(ZoneOffset.ofHours(1)), withOffset(ZoneOffset.ofHours(2)));
 
-        assertEquals(ZoneOffset.ofHours(2), SyncParameters.suggestedCameraZone(files, BERLIN));
+        assertEquals(ZoneOffset.ofHours(2), SyncParameters.suggestedCameraZone(files, List.of(), BERLIN));
         assertEquals(BERLIN, SyncParameters.suggestedCameraZone(
-                List.of(TestMedia.image(LocalDateTime.parse("2026-09-02T11:08:00"))), BERLIN));
+                List.of(TestMedia.image(LocalDateTime.parse("2026-09-02T11:08:00"))), List.of(), BERLIN));
     }
 }

@@ -28,9 +28,11 @@ package tf.geotagger.sync;
 import java.time.Duration;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import tf.geotagger.model.MediaFile;
@@ -64,21 +66,29 @@ public record SyncParameters(ZoneId cameraZone, Duration cameraOffset, Duration 
     }
 
     /**
-     * Most frequent OffsetTimeOriginal of the files - fallback (usually the system zone) if none has one.
+     * Most frequent OffsetTimeOriginal of the files, otherwise the most frequent zone of the maker notes (e.g.
+     * Canon:TimeZone), otherwise the fallback (usually the system zone) - user decision 18.11.2026.
      *
      * @param files files of the sync
-     * @param fallback zone to use if no file has an OffsetTimeOriginal
+     * @param makerZones zones of the maker notes of (some of) the files - read only for the dialog, see
+     * MetadataReader.makerZones
+     * @param fallback zone to use if no file has an OffsetTimeOriginal or a zone in its maker notes
      * @return suggested camera zone for the sync dialog
      */
-    public static ZoneId suggestedCameraZone(List<MediaFile> files, ZoneId fallback) {
-        final Map<ZoneOffset, Long> counts = files.stream()
-                .map(MediaFile::timeOffset)
+    public static ZoneId suggestedCameraZone(List<MediaFile> files, Collection<ZoneOffset> makerZones, ZoneId fallback) {
+        return mostFrequent(files.stream().map(MediaFile::timeOffset).toList())
+                .or(() -> mostFrequent(List.copyOf(makerZones)))
+                .<ZoneId>map(zone -> zone)
+                .orElse(fallback);
+    }
+
+    private static Optional<ZoneOffset> mostFrequent(List<ZoneOffset> zones) {
+        final Map<ZoneOffset, Long> counts = zones.stream()
                 .filter(Objects::nonNull)
                 .collect(Collectors.groupingBy(Function.identity(), Collectors.counting()));
         return counts.entrySet().stream()
                 // ties: deterministic by offset
                 .max(Map.Entry.<ZoneOffset, Long>comparingByValue().thenComparing(Map.Entry.<ZoneOffset, Long>comparingByKey()))
-                .<ZoneId>map(Map.Entry::getKey)
-                .orElse(fallback);
+                .map(Map.Entry::getKey);
     }
 }

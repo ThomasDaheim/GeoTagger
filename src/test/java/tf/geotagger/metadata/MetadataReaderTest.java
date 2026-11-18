@@ -32,8 +32,10 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -65,6 +67,21 @@ class MetadataReaderTest {
         if (exifTool != null) {
             exifTool.close();
         }
+    }
+
+    @Test
+    void canonSampleHasItsCameraZone() {
+        // plan 6: Canon:TimeZone 120 min (DaylightSavings 60, Paris) - the zone the EOS clock was set to
+        final Path sample = Path.of("src/test/resources/samples/IMG_6046.CR2");
+        Assumptions.assumeTrue(Files.isRegularFile(sample), "private sample files are not in the repo");
+
+        assertEquals(Map.of(sample, ZoneOffset.ofHours(2)), reader.makerZones(List.of(sample)));
+    }
+
+    @Test
+    void filesWithoutMakerZoneAreLeftOut() {
+        final Path file = TestFiles.image(dir, "bild.jpg");
+        assertTrue(reader.makerZones(List.of(file)).isEmpty());
     }
 
     @Test

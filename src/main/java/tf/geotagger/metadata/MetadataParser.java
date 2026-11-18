@@ -41,6 +41,10 @@ import tf.geotagger.model.Field;
  */
 final class MetadataParser {
     private static final DateTimeFormatter EXIF_DATE = DateTimeFormatter.ofPattern("yyyy:MM:dd HH:mm:ss");
+    // ZoneOffset allows +-18 h
+    private static final int MAX_ZONE_MINUTES = 18 * 60;
+    /** zone of the camera clock in minutes (with -n), daylight saving included - not read with the other tags */
+    static final String MAKER_ZONE_TAG = "Canon:TimeZone";
 
     private MetadataParser() {
     }
@@ -70,6 +74,22 @@ final class MetadataParser {
         // QuickTime stores UTC
         final LocalDateTime utc = dateTime(get(entry, ReadTag.QUICKTIME_CREATE_DATE));
         return utc != null ? new CaptureTime(utc, true) : null;
+    }
+
+    /**
+     * @param entry ExifTool's JSON entry of a file, read with -n and without -fast2 (that skips the maker notes)
+     * @return zone the camera clock was set to (Canon:TimeZone in minutes, daylight saving included) - null if missing
+     * or not a whole number of minutes within +-18 h
+     */
+    static ZoneOffset makerZone(Map<String, Object> entry) {
+        if (!(entry.get(MAKER_ZONE_TAG) instanceof Number number)) {
+            return null;
+        }
+        final double value = number.doubleValue();
+        if (value != Math.rint(value) || Math.abs(value) > MAX_ZONE_MINUTES) {
+            return null;
+        }
+        return ZoneOffset.ofTotalSeconds((int) value * 60);
     }
 
     private static void put(Map<Field, Object> values, Field field, Object value) {

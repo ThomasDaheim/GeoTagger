@@ -30,10 +30,12 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -86,6 +88,28 @@ public class MetadataReader {
 
     public List<MediaFile> read(List<Path> files) {
         return read(files, count -> {});
+    }
+
+    /**
+     * The zone the camera clock was set to, from the maker notes (Canon:TimeZone) - read on demand for the sync dialog,
+     * because read() skips the maker notes with "-fast2" (plan 6).
+     *
+     * @param files files to look at - keep the list short, reading maker notes is slow
+     * @return zone per file - files without one are left out
+     */
+    public Map<Path, ZoneOffset> makerZones(List<Path> files) {
+        final Map<Path, ZoneOffset> zones = new LinkedHashMap<>();
+        if (files.isEmpty()) {
+            return zones;
+        }
+        final Map<Path, Map<String, Object>> entries = byPath(exifTool.readJson(files, List.of(MetadataParser.MAKER_ZONE_TAG), List.of()));
+        for (Path file : files) {
+            final ZoneOffset zone = MetadataParser.makerZone(entries.getOrDefault(key(file), Map.of()));
+            if (zone != null) {
+                zones.put(file, zone);
+            }
+        }
+        return zones;
     }
 
     /**
