@@ -202,7 +202,19 @@ public final class GpxReader {
      * @throws IOException if the folder can't be listed
      */
     public static List<Path> findGpxFiles(Path dir) throws IOException {
-        try (Stream<Path> files = Files.list(dir)) {
+        return findGpxFiles(dir, false);
+    }
+
+    /**
+     * GPX files of a folder, sorted by path - e.g. a GPX archive with a folder per year for the sync dialog.
+     *
+     * @param dir folder to search
+     * @param subfolders also search the subfolders
+     * @return the *.gpx files, case insensitive
+     * @throws IOException if a folder can't be listed
+     */
+    public static List<Path> findGpxFiles(Path dir, boolean subfolders) throws IOException {
+        try (Stream<Path> files = subfolders ? Files.walk(dir) : Files.list(dir)) {
             return files
                     .filter(Files::isRegularFile)
                     .filter(GpxReader::isGpxFile)

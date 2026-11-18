@@ -34,6 +34,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiConsumer;
 
 /**
  * All points of the tracks used for a sync, sorted by time - tracks may overlap or come in any order.
@@ -49,6 +50,8 @@ public final class TrackTimeline {
         }
     }
 
+    private static final String NO_TIMES = "no points with time";
+
     private final List<TrackPoint> points;
     private final Instant[] times;
 
@@ -58,14 +61,31 @@ public final class TrackTimeline {
     }
 
     public static LoadResult load(List<Path> gpxFiles) {
+        return load(gpxFiles, (done, total) -> { });
+    }
+
+    /**
+     * Reads GPX files for the sync - a file without points with time (e.g. a planned route) counts as failure.
+     *
+     * @param gpxFiles files to read
+     * @param progress called with (files read, files in total) after each file
+     * @return the points of all usable files and the reasons for the others
+     */
+    public static LoadResult load(List<Path> gpxFiles, BiConsumer<Integer, Integer> progress) {
         final List<TrackPoint> points = new ArrayList<>();
         final Map<Path, String> failures = new LinkedHashMap<>();
+        int done = 0;
         for (Path gpx : gpxFiles) {
             try {
-                points.addAll(GpxReader.read(gpx));
+                final List<TrackPoint> read = GpxReader.read(gpx);
+                if (read.isEmpty()) {
+                    failures.put(gpx, NO_TIMES);
+                }
+                points.addAll(read);
             } catch (IOException ex) {
-                failures.put(gpx, ex.getMessage());
+                failures.put(gpx, String.valueOf(ex.getMessage()));
             }
+            progress.accept(++done, gpxFiles.size());
         }
         return new LoadResult(new TrackTimeline(points), failures);
     }

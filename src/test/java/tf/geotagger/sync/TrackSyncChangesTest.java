@@ -44,7 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class TrackSyncApplyTest {
+class TrackSyncChangesTest {
     private static final double DELTA = 1e-9;
     private static final ZoneId BERLIN = ZoneId.of("Europe/Berlin");
 
@@ -70,43 +70,62 @@ class TrackSyncApplyTest {
         assertEquals(List.of(without, with), TrackSync.eligible(List.of(without, with), true));
     }
 
+    private static Map<MediaFile, Map<Field, Object>> changes(SyncParameters parameters, MediaFile... files) {
+        return TrackSync.changes(TrackSync.match(List.of(files), TIMELINE, parameters), parameters);
+    }
+
     @Test
     void matchedFilesGetPositionAndElevation() {
         final MediaFile matched = TestMedia.image(INSIDE);
         final MediaFile unmatched = TestMedia.image(OUTSIDE);
-        final SyncParameters parameters = parameters(true, false);
 
-        final int applied = TrackSync.apply(TrackSync.match(List.of(matched, unmatched), TIMELINE, parameters), parameters);
+        final Map<MediaFile, Map<Field, Object>> changes = changes(parameters(true, false), matched, unmatched);
 
-        assertEquals(1, applied);
-        assertEquals(46.05, matched.latitude(), DELTA);
-        assertEquals(11.1, matched.longitude(), DELTA);
-        assertEquals(1050.0, matched.altitude(), DELTA);
-        assertNull(matched.timeOffset());
-        assertFalse(unmatched.isChanged());
+        assertEquals(List.of(matched), List.copyOf(changes.keySet()));
+        final Map<Field, Object> values = changes.get(matched);
+        assertEquals(46.05, (Double) values.get(Field.LATITUDE), DELTA);
+        assertEquals(11.1, (Double) values.get(Field.LONGITUDE), DELTA);
+        assertEquals(1050.0, (Double) values.get(Field.ALTITUDE), DELTA);
+        assertFalse(values.containsKey(Field.TIME_OFFSET));
+    }
+
+    @Test
+    void filesAreNotChanged() {
+        // the changes become one undo step - the files change only when it runs (plan 6)
+        final MediaFile matched = TestMedia.image(INSIDE);
+
+        changes(parameters(true, true), matched);
+
+        assertFalse(matched.isChanged());
+    }
+
+    @Test
+    void onlyResultsWithPositionChange() {
+        final MediaFile unmatched = TestMedia.image(OUTSIDE);
+        final MediaFile withoutTime = TestMedia.image(null);
+
+        assertTrue(changes(parameters(true, true), unmatched, withoutTime).isEmpty());
     }
 
     @Test
     void elevationOnlyWhenRequested() {
         final MediaFile matched = TestMedia.image(INSIDE);
-        final SyncParameters parameters = parameters(false, false);
 
-        TrackSync.apply(TrackSync.match(List.of(matched), TIMELINE, parameters), parameters);
+        final Map<Field, Object> values = changes(parameters(false, false), matched).get(matched);
 
-        assertTrue(matched.hasCoordinates());
-        assertNull(matched.altitude());
+        assertTrue(values.containsKey(Field.LATITUDE));
+        assertFalse(values.containsKey(Field.ALTITUDE));
     }
 
     @Test
     void timeZoneIsWrittenForImagesOnly() {
         final MediaFile image = TestMedia.image(INSIDE);
         final MediaFile video = TestMedia.file(MediaType.VIDEO, new CaptureTime(INSIDE, false), Map.of());
-        final SyncParameters parameters = parameters(true, true);
 
-        TrackSync.apply(TrackSync.match(List.of(image, video), TIMELINE, parameters), parameters);
+        final Map<MediaFile, Map<Field, Object>> changes = changes(parameters(true, true), image, video);
 
-        assertEquals(ZoneOffset.ofHours(2), image.timeOffset());
-        assertTrue(video.hasCoordinates());
-        assertNull(video.timeOffset());
+        assertEquals(ZoneOffset.ofHours(2), changes.get(image).get(Field.TIME_OFFSET));
+        assertTrue(changes.get(video).containsKey(Field.LATITUDE));
+        assertNull(changes.get(video).get(Field.TIME_OFFSET));
     }
 }

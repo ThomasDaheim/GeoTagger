@@ -27,7 +27,10 @@ package tf.geotagger.sync;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.EnumMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import tf.geotagger.model.Field;
 import tf.geotagger.model.MediaFile;
 import tf.geotagger.model.MediaType;
@@ -59,31 +62,48 @@ public final class TrackSync {
     }
 
     /**
-     * Sets the results with a position as pending changes - nothing is written to the files.
+     * Files the sync dialog handles - see spec, section "Track-Sync-Dialog", "Dateien".
+     *
+     * @param listed the files of the list (filtered)
+     * @param selected the files the user selected
+     * @param scope "without coordinates" or "selection"
+     * @param overwrite with "selection": include selected files that already have coordinates
+     * @return the files to match, in their order
+     */
+    public static List<MediaFile> scope(List<MediaFile> listed, List<MediaFile> selected, FileScope scope, boolean overwrite) {
+        return switch (scope) {
+            case WITHOUT_COORDINATES -> eligible(listed, false);
+            case SELECTION -> eligible(selected, overwrite);
+        };
+    }
+
+    /**
+     * The values the results with a position give - for one undo step; the files themselves aren't changed.
      *
      * @param results results of match()
      * @param parameters the parameters used for match() - elevation and time zone options
-     * @return number of changed files
+     * @return new values per file with a position, in the order of the results
      */
-    public static int apply(List<SyncResult> results, SyncParameters parameters) {
-        int applied = 0;
+    public static Map<MediaFile, Map<Field, Object>> changes(List<SyncResult> results, SyncParameters parameters) {
+        final Map<MediaFile, Map<Field, Object>> changes = new LinkedHashMap<>();
         for (SyncResult result : results) {
             if (!result.hasPosition()) {
                 continue;
             }
             final MediaFile file = result.file();
-            file.set(Field.LATITUDE, result.latitude());
-            file.set(Field.LONGITUDE, result.longitude());
+            final Map<Field, Object> values = new EnumMap<>(Field.class);
+            values.put(Field.LATITUDE, result.latitude());
+            values.put(Field.LONGITUDE, result.longitude());
             if (parameters.takeElevation() && result.elevation() != null) {
-                file.set(Field.ALTITUDE, result.elevation());
+                values.put(Field.ALTITUDE, result.elevation());
             }
             // videos get no time zone - see spec, section "Felder"
             if (parameters.writeTimeZone() && file.mediaType() == MediaType.IMAGE) {
-                file.set(Field.TIME_OFFSET, parameters.cameraZone().getRules().getOffset(result.correctedTime()));
+                values.put(Field.TIME_OFFSET, parameters.cameraZone().getRules().getOffset(result.correctedTime()));
             }
-            applied++;
+            changes.put(file, values);
         }
-        return applied;
+        return changes;
     }
 
     private static SyncResult match(MediaFile file, TrackTimeline timeline, SyncParameters parameters) {

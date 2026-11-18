@@ -168,4 +168,16 @@ class GpxReaderTest {
 
         assertEquals(List.of(dir.resolve("a.gpx"), dir.resolve("b.GPX")), GpxReader.findGpxFiles(dir));
     }
+
+    @Test
+    void findsGpxFilesInSubfolders() throws IOException {
+        // user decision 18.11.2026: the GPX folder of the sync dialog includes subfolders
+        gpx("a.gpx", GPX_10);
+        gpx("x.txt", "x");
+        Files.createDirectory(dir.resolve("2025"));
+        gpx("2025/b.GPX", GPX_10);
+
+        assertEquals(List.of(dir.resolve("2025").resolve("b.GPX"), dir.resolve("a.gpx")), GpxReader.findGpxFiles(dir, true));
+        assertEquals(List.of(dir.resolve("a.gpx")), GpxReader.findGpxFiles(dir, false));
+    }
 }

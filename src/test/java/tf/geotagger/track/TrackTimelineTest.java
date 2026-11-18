@@ -29,7 +29,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -94,5 +96,27 @@ class TrackTimelineTest {
 
         assertEquals(2, result.timeline().size());
         assertEquals(List.of(broken), List.copyOf(result.failures().keySet()));
+    }
+
+    @Test
+    void loadReportsProgressAndFilesWithoutTimes() throws IOException {
+        final Path good = Files.writeString(dir.resolve("gut.gpx"), """
+                <gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg>
+                  <trkpt lat="46.4" lon="11.6"><time>2026-09-02T09:08:00Z</time></trkpt>
+                </trkseg></trk></gpx>
+                """);
+        // e.g. a planned route - points without time are of no use for the sync
+        final Path untimed = Files.writeString(dir.resolve("route.gpx"), """
+                <gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg>
+                  <trkpt lat="46.4" lon="11.6"/>
+                </trkseg></trk></gpx>
+                """);
+        final List<List<Integer>> progress = new ArrayList<>();
+
+        final TrackTimeline.LoadResult result = TrackTimeline.load(List.of(good, untimed), (done, total) -> progress.add(List.of(done, total)));
+
+        assertEquals(List.of(List.of(1, 2), List.of(2, 2)), progress);
+        assertEquals(1, result.timeline().size());
+        assertEquals(Map.of(untimed, "no points with time"), result.failures());
     }
 }
