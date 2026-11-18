@@ -30,6 +30,7 @@ import tf.geo.service.SrtmFormat;
 import tf.geo.service.SrtmInterpolation;
 import tf.geotagger.enrich.AltitudeSource;
 import tf.geotagger.enrich.PlaceService;
+import tf.geotagger.sync.TrackSource;
 import tf.helper.general.IPreferencesStore;
 import tf.helper.general.ITypedPreference;
 import tf.helper.general.NodePreferencesStore;
@@ -66,6 +67,18 @@ public enum GeoTaggerPreferences implements ITypedPreference {
     SRTM_DOWNLOAD_FORMAT("srtmDownloadFormat", SrtmFormat.SRTM3.name(), SrtmFormat.class),
     SRTM_INTERPOLATION("srtmInterpolation", SrtmInterpolation.BILINEAR.name(), SrtmInterpolation.class),
     ORS_API_KEY("orsApiKey", "", String.class),
+    // track sync dialog: the last used parameters - all but the camera zone, that comes from the files (user decision
+    // 18.11.2026)
+    SYNC_TRACK_SOURCE("syncTrackSource", TrackSource.LOADED_TRACKS.name(), TrackSource.class),
+    SYNC_GPX_FILE("syncGpxFile", "", String.class),
+    SYNC_GPX_FOLDER("syncGpxFolder", "", String.class),
+    SYNC_OFFSET_SECONDS("syncOffsetSeconds", "0", Long.class),
+    SYNC_MAX_GAP_MINUTES("syncMaxGapMinutes", "30", Long.class),
+    SYNC_INTERPOLATE("syncInterpolate", Boolean.toString(true), Boolean.class),
+    SYNC_ONLY_PAST("syncOnlyPast", Boolean.toString(false), Boolean.class),
+    SYNC_TAKE_ALTITUDE("syncTakeAltitude", Boolean.toString(true), Boolean.class),
+    SYNC_WRITE_TIME_ZONE("syncWriteTimeZone", Boolean.toString(false), Boolean.class),
+    SYNC_OVERWRITE("syncOverwrite", Boolean.toString(false), Boolean.class),
     RECENT_FOLDER("recentFolder", System.getProperty("user.home"), String.class),
     INCLUDE_SUBFOLDERS("includeSubfolders", Boolean.toString(false), Boolean.class);
 
