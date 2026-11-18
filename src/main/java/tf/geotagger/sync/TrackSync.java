@@ -96,6 +96,9 @@ public final class TrackSync {
             values.put(Field.LONGITUDE, result.longitude());
             if (parameters.takeElevation() && result.elevation() != null) {
                 values.put(Field.ALTITUDE, result.elevation());
+            } else if (parameters.takeElevation() && file.altitude() != null) {
+                // the track has no altitude here - the old one belongs to the old position (final review of plan 6)
+                values.put(Field.ALTITUDE, null);
             }
             // videos get no time zone - see spec, section "Felder"
             if (parameters.writeTimeZone() && file.mediaType() == MediaType.IMAGE) {

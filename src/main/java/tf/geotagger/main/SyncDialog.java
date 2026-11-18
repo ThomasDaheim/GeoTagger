@@ -38,7 +38,6 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.Collection;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -49,6 +48,9 @@ import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
 import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.concurrent.Task;
+import javafx.event.ActionEvent;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
@@ -86,6 +88,7 @@ import tf.geotagger.sync.SyncResult;
 import tf.geotagger.sync.SyncSummary;
 import tf.geotagger.sync.TrackSource;
 import tf.geotagger.sync.TrackSync;
+import tf.geotagger.track.GpxCache;
 import tf.geotagger.track.GpxReader;
 import tf.geotagger.track.TrackPoint;
 import tf.geotagger.track.TrackTimeline;
@@ -111,10 +114,10 @@ final class SyncDialog {
      * @param loadedPoints the points of the loaded tracks
      * @param loadedTracks number of loaded tracks
      * @param makerZones zones of the maker notes of some files - for the suggested camera zone
-     * @param cache GPX files and folders read in this session, by path - filled by the dialog
+     * @param cache GPX files read in this session - per file, read again when changed
      */
     record SyncInput(Path folder, List<MediaFile> listed, List<MediaFile> selected, List<TrackPoint> loadedPoints,
-            int loadedTracks, Collection<ZoneOffset> makerZones, Map<Path, TrackTimeline.LoadResult> cache) {
+            int loadedTracks, Collection<ZoneOffset> makerZones, GpxCache cache) {
     }
 
     /**
@@ -169,6 +172,8 @@ final class SyncDialog {
     });
     // the GPX file or folder whose points are shown, null for the loaded tracks or nothing chosen
     private Path sourcePath;
+    // the GPX file or folder being read right now, null if none
+    private Path readingPath;
     // its points - empty while it is read or if it couldn't be read
     private Optional<TrackTimeline.LoadResult> sourceResult = Optional.empty();
     // shown instead of the preview while reading or if the path can't be used, null otherwise
@@ -340,11 +345,13 @@ final class SyncDialog {
             readSource();
             recompute();
         });
-        // Enter or leaving the field reads the path typed in
+        // Enter or leaving the field reads the path typed in - Enter in a field never applies the run (final review of
+        // plan 6): a TextField with an action handler doesn't pass Enter on to the default button
         for (TextField path : List.of(gpxFile, gpxFolder)) {
             path.setOnAction(event -> {
                 readSource();
                 recompute();
+                event.consume();
             });
             path.focusedProperty().addListener((observable, oldValue, focused) -> {
                 if (!focused) {
@@ -361,6 +368,14 @@ final class SyncDialog {
         for (TextField field : List.of(offsetDays, offsetHours, offsetMinutes, offsetSeconds, maxGap, zone.getEditor())) {
             field.textProperty().addListener((observable, oldValue, newValue) -> recompute());
         }
+        for (TextField field : List.of(offsetDays, offsetHours, offsetMinutes, offsetSeconds, maxGap)) {
+            field.setOnAction(ActionEvent::consume);
+        }
+        zone.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
+            if (event.getCode() == KeyCode.ENTER) {
+                event.consume();
+            }
+        });
         offsetSign.valueProperty().addListener((observable, oldValue, newValue) -> recompute());
     }
 
@@ -442,20 +457,21 @@ final class SyncDialog {
             sourceMessage = field == gpxFile ? "Choose a GPX file" : "Choose a folder with GPX files";
             return;
         }
-        if (path.equals(sourcePath)) {
-            // read already or being read
+        if (path.equals(readingPath)) {
+            // being read right now
             return;
         }
-        sourcePath = path;
-        final TrackTimeline.LoadResult cached = input.cache().get(path);
-        if (cached != null) {
-            sourceResult = Optional.of(cached);
-            sourceMessage = null;
-            return;
+        if (!path.equals(sourcePath)) {
+            // another path: nothing to show until it is read; the same path keeps its points while read again
+            sourcePath = path;
+            sourceResult = Optional.empty();
+            sourceMessage = "Reading GPX files ...";
         }
-        sourceResult = Optional.empty();
-        sourceMessage = "Reading GPX files ...";
+        // read every time - the cache reads only new or changed files, so a folder that got today's track or a file
+        // that failed while being copied is up to date (final review of plan 6)
+        readingPath = path;
         final boolean folder = field == gpxFolder;
+        final GpxCache cache = input.cache();
         final Task<TrackTimeline.LoadResult> task = new Task<>() {
             @Override
             protected TrackTimeline.LoadResult call() throws IOException {
@@ -463,7 +479,7 @@ final class SyncDialog {
                 if (files.isEmpty()) {
                     throw new IOException("No GPX files in " + path);
                 }
-                return TrackTimeline.load(files, (done, total) -> updateMessage("Reading GPX files: " + done + " / " + total));
+                return cache.load(files, (done, total) -> updateMessage("Reading GPX files: " + done + " / " + total));
             }
         };
         task.messageProperty().addListener((observable, oldValue, message) -> {
@@ -473,7 +489,9 @@ final class SyncDialog {
             }
         });
         task.setOnSucceeded(event -> {
-            input.cache().put(path, task.getValue());
+            if (path.equals(readingPath)) {
+                readingPath = null;
+            }
             if (path.equals(sourcePath)) {
                 sourceResult = Optional.of(task.getValue());
                 sourceMessage = null;
@@ -481,6 +499,9 @@ final class SyncDialog {
             }
         });
         task.setOnFailed(event -> {
+            if (path.equals(readingPath)) {
+                readingPath = null;
+            }
             if (path.equals(sourcePath)) {
                 sourceResult = Optional.empty();
                 sourceMessage = String.valueOf(task.getException().getMessage());

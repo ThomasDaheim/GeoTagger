@@ -37,7 +37,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.EnumMap;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -134,9 +133,9 @@ import tf.geotagger.preview.Preview;
 import tf.geotagger.preview.PreviewProvider;
 import tf.geotagger.sync.SyncSummary;
 import tf.geotagger.sync.TrackSync;
+import tf.geotagger.track.GpxCache;
 import tf.geotagger.track.GpxTrack;
 import tf.geotagger.track.TrackPoint;
-import tf.geotagger.track.TrackTimeline;
 import tf.helper.doundo.DoUndoManager;
 import tf.helper.javafx.ShowAlerts;
 import tf.helper.javafx.TableViewPreferences;
@@ -262,8 +261,8 @@ public class GeoTagger implements Initializable {
     private SrtmDownloader srtmDownloader = new SrtmDownloader(new JdkFileDownload());
     // "format|tile" of tiles a download of this session didn't bring - not asked for again
     private final Set<String> unavailableTiles = new HashSet<>();
-    // GPX files and folders the sync dialog read in this session, by path
-    private final Map<Path, TrackTimeline.LoadResult> gpxCache = new HashMap<>();
+    // GPX files the sync dialog read in this session - per file, read again when changed
+    private final GpxCache gpxCache = new GpxCache();
     // counts loadFolder calls - results of an older one are dropped
     private int loadGeneration = 0;
     // DoUndoManager is a singleton - its listener is removed in stop(), otherwise it keeps this window alive

@@ -108,6 +108,22 @@ class TrackSyncChangesTest {
     }
 
     @Test
+    void oldAltitudeGoesWhenTheTrackHasNone() {
+        // final review of plan 6: overwriting the position with a track without <ele> kept the altitude of the old place
+        final MediaFile moved = TestMedia.file(MediaType.IMAGE, new CaptureTime(INSIDE, false),
+                Map.of(Field.LATITUDE, 41.9, Field.LONGITUDE, 12.5, Field.ALTITUDE, 21.0));
+        final TrackTimeline withoutElevation = new TrackTimeline(List.of(
+                new TrackPoint(Instant.parse("2026-09-02T09:00:00Z"), 46.0, 11.0, null),
+                new TrackPoint(Instant.parse("2026-09-02T09:10:00Z"), 46.1, 11.2, null)));
+        final SyncParameters parameters = parameters(true, false);
+
+        final Map<Field, Object> values = TrackSync.changes(TrackSync.match(List.of(moved), withoutElevation, parameters), parameters).get(moved);
+
+        assertTrue(values.containsKey(Field.ALTITUDE));
+        assertNull(values.get(Field.ALTITUDE));
+    }
+
+    @Test
     void elevationOnlyWhenRequested() {
         final MediaFile matched = TestMedia.image(INSIDE);
 

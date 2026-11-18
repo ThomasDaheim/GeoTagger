@@ -396,6 +396,44 @@ class GeoTaggerSyncUiTest {
     }
 
     @Test
+    void failedFileIsReadAgainOnEnter(FxRobot robot) throws IOException, TimeoutException {
+        // final review of plan 6: a GPX still being copied failed - once complete, Enter must read it again
+        final Path gpx = Files.writeString(dir.resolve("later.gpx"), "<gpx><trk>", StandardCharsets.UTF_8);
+        loadFolder(robot);
+        selectOnly(robot);
+        openSync(robot);
+        chooseSource(robot, "#syncSourceFile", "#syncGpxFile", gpx);
+        assertTrue(applyDisabled(robot));
+
+        Files.writeString(gpx, TOUR, StandardCharsets.UTF_8);
+        chooseSource(robot, "#syncSourceFile", "#syncGpxFile", gpx);
+
+        assertEquals(SyncResult.Status.MATCHED, row(robot, "a.jpg").status());
+    }
+
+    @Test
+    void enterInAFieldDoesNotApply(FxRobot robot) throws IOException, TimeoutException {
+        // final review of plan 6: Enter to confirm a value fired the default button - the run was applied
+        loadFolder(robot);
+        loadTour(robot);
+        selectOnly(robot);
+        openSync(robot);
+        final TextField minutes = robot.lookup("#syncOffsetMinutes").queryAs(TextField.class);
+        robot.clickOn(minutes);
+        if (!minutes.isFocused()) {
+            robot.interact(minutes::requestFocus);
+        }
+        WaitForAsyncUtils.waitFor(5, TimeUnit.SECONDS, minutes::isFocused);
+
+        robot.type(javafx.scene.input.KeyCode.ENTER);
+        WaitForAsyncUtils.waitForFxEvents();
+
+        assertTrue(robot.lookup("#syncApply").tryQuery().map(Node::isVisible).orElse(false));
+        assertFalse(fileNamed(robot, "a.jpg").isChanged());
+        click(robot, "#syncCancel");
+    }
+
+    @Test
     void parametersAreRemembered(FxRobot robot) throws IOException, TimeoutException {
         loadFolder(robot);
         loadTour(robot);
