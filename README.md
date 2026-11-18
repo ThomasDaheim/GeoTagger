@@ -37,9 +37,14 @@ Work in progress. Available so far:
   * for the selected files (their altitude is overwritten), or without selection for all listed files without altitude
   * missing SRTM tiles are downloaded after a question - SRTM3 from viewfinderpanoramas.org (default) or SRTM1 from ESA
   * bilinear interpolation (default) or the nearest grid point; one undo step per run
-* GPX reading and track sync logic (the sync dialog follows)
+* "Track sync...": positions from GPX tracks by the capture time - like GeoSetter's synchronisation
+  * tracks: the loaded ones, a GPX file or all GPX files of a folder with its subfolders (read in the background, kept for the session)
+  * files without coordinates, or the selection (optionally overwriting their coordinates)
+  * camera time zone suggested from OffsetTimeOriginal or the maker notes (Canon), additional offset with a live camera clock to compare with the camera display
+  * preview that updates with every change: matched (green), large gap (orange), no match (grey); interpolation or nearest point, maximum time difference, altitude and time zone from the track
+  * one undo step; the last parameters (all but the time zone) are remembered
 
-Planned next: the track sync dialog. The time zone isn't derived from the coordinates - it comes from the file, the track sync or the edit dialog.
+Planned next: replacing GeoSetter in the image workflow (see the spec, "Ablösung von GeoSetter"). The time zone isn't derived from the coordinates - it comes from the file, the track sync or the edit dialog.
 
 ## Notes
 

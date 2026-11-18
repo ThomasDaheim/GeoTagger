@@ -143,7 +143,7 @@ Die Abhängigkeiten zeigen nur in eine Richtung: `ui` → `enrich` / `sync` / `m
 
 Das Layout ist an GeoSetter angelehnt:
 
-- **Werkzeugleiste:** Ordnerpfad, Häkchen „Unterordner“, „Edit…“, „Find place“ (Ort ermitteln), „Find altitude“ (Höhe ermitteln), Track-Sync, Undo, Redo und „Speichern (n)“ mit der Anzahl ungespeicherter Dateien. Eigene Icon-Leisten je Bereich kommen später.
+- **Werkzeugleiste:** Ordnerpfad, Häkchen „Unterordner“, „Edit…“, „Find place“ (Ort ermitteln), „Find altitude“ (Höhe ermitteln), „Track sync…“, Undo, Redo und „Speichern (n)“ mit der Anzahl ungespeicherter Dateien. Eigene Icon-Leisten je Bereich kommen später.
 - **Links oben:**
   - Statusfilter als Chips mit Anzahl.
   - Darunter die Dateiliste. Spalten: Name, Aufnahmezeit, Koordinaten (Grad/Min/Sek, z. B. `N46°40'48.05"; E11°5'28.61"`), Höhe, Ländercode, Land, Region, Ort, Sublocation, Zeitzone.
@@ -167,9 +167,10 @@ Nach dem Laden eines Ordners ist die Karte auf alle Dateien eingepasst. Die erst
 - **Track-Quelle**, eine von:
   - alle geladenen Tracks
   - eine GPX-Datei
-  - alle GPX-Dateien in einem Ordner (zuletzt gewählter Ordner wird gespeichert, z. B. ein zentrales GPX-Archiv)
-- **Dateien:** „Ohne Koordinaten“ (Standard) oder „Auswahl“. Dazu das Häkchen „Vorhandene überschreiben“, standardmäßig aus.
-- **Zeitzone der Kamera:** vorbelegt aus `OffsetTimeOriginal` der Datei, falls vorhanden, sonst aus der Systemzeitzone.
+  - alle GPX-Dateien in einem Ordner **samt Unterordnern** (z. B. ein zentrales GPX-Archiv mit einem Ordner je Jahr; Entscheidung vom 18.11.2026)
+  - GPX-Datei und -Ordner werden im Hintergrund gelesen, mit Fortschritt, und für die Sitzung gemerkt. Ein Index ist nicht nötig: üblich sind 1–2 Dateien bis 30 MB. Unlesbare Dateien und Dateien ohne Punkte mit Zeit stehen mit Grund unter der Zusammenfassung.
+- **Dateien:** „Ohne Koordinaten“ (die gelisteten Dateien) oder „Auswahl“. Vorgewählt ist „Auswahl“, wenn der Nutzer selbst Dateien ausgewählt hat, sonst „Ohne Koordinaten“ (wie die Regel der Werkzeugleiste). Dazu das Häkchen „Vorhandene überschreiben“ für die Auswahl, standardmäßig aus.
+- **Zeitzone der Kamera:** vorbelegt mit dem häufigsten `OffsetTimeOriginal` der Dateien, sonst der Zeitzone aus den Maker Notes (`Canon:TimeZone`, Sommerzeit eingerechnet), sonst der Systemzeitzone (Entscheidung vom 18.11.2026). Die Maker Notes liest GeoTagger erst beim Öffnen des Dialogs für bis zu 20 Dateien, weil das Laden sie mit `-fast2` überspringt.
 - **Zusätzlicher Offset:** Vorzeichen, Tage, Stunden, Minuten, Sekunden.
 - **Kamera-Uhrzeit:** Diese Anzeige zeigt live die jetzige Systemzeit mit Zeitzone und Offset. Der Nutzer stellt Zeitzone und Offset so ein, dass sie mit dem Kameradisplay übereinstimmt.
 - **Maximale Zeitdifferenz** zum nächsten Trackpunkt, standardmäßig 30 min.
@@ -178,6 +179,7 @@ Nach dem Laden eines Ordners ist die Karte auf alle Dateien eingepasst. Die erst
   - „Keine Trackpunkte in der Zukunft berücksichtigen“
   - „Höhe aus Track übernehmen“ (Standard an). Es betrifft nur Dateien, die in diesem Lauf Koordinaten bekommen.
   - „Zeitzone in Datei schreiben“ (Standard aus). Es setzt die gewählte Kamera-Zeitzone als `OffsetTimeOriginal` für die zugeordneten Dateien.
+- **Gemerkt** werden alle Parameter außer der Zeitzone: Track-Quelle, GPX-Datei, GPX-Ordner, Offset, maximale Differenz, Zuweisung, die Häkchen und „Vorhandene überschreiben“. Ungültige Eingaben (Zeitzone, Offset, maximale Differenz) sind rot und sperren „Apply“.
 
 **Vorschau**
 
